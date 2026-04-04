@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Login  (login.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    Login page for existing CupIT users. Offers two methods
+    matching the signup page:
+      1. Email + password
+      2. Magic link (passwordless)
+
+    On successful login, redirects to dashboard.html.
+    If already logged in, redirects to dashboard.html immediately.
+
+  SUPABASE CALLS:
+    signInWithPassword()  — email/password login
+    signInWithOtp()       — sends magic link to email
+
+  FUTURE / TODO:
+    - Password reset flow (forgot password link → reset page)
+    - "Remember me" / session persistence options
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#faf6ee" />
+  <title>Log In — CupIT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --bg:      #faf6ee;
+      --paper:   #fff9f0;
+      --dark:    #1c0f05;
+      --brown:   #5c3317;
+      --mid:     #9b6b47;
+      --light:   #c9a882;
+      --accent:  #b85c2b;
+      --cream:   #f5e9d0;
+      --steam:   #e8ddd0;
+      --divider: rgba(92,51,23,0.12);
+      --r:       14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      font-size: 15px;
+    }
+
+    /* Grain texture */
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: var(--dark);
+      padding: 18px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-back {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(201,168,130,0.4); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-back:hover { color: var(--light); }
+
+    /* ── DARK HEADER ── */
+    .page-header {
+      background: var(--dark);
+      padding: 40px 24px 52px;
+      text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(184,92,43,0.25) 0%, transparent 65%);
+    }
+    .page-header-content { position: relative; z-index: 1; }
+    .page-header-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px; display: block;
+    }
+    .page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 5vw, 2.6rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+    }
+    .page-header h1 em { font-style: italic; color: var(--light); }
+    .page-header-sub {
+      font-size: 0.9rem; color: rgba(245,233,208,0.45);
+      margin-top: 8px; font-weight: 300;
+    }
+
+    /* ── FORM CONTAINER ── */
+    .form-container {
+      flex: 1; padding: 40px 20px 80px;
+      display: flex; align-items: flex-start; justify-content: center;
+    }
+    .form-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 20px;
+      padding: 32px;
+      width: 100%; max-width: 420px;
+      box-shadow: 0 4px 32px rgba(92,51,23,0.08);
+      animation: fadeUp 0.4s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── MODE TABS ── */
+    .mode-tabs {
+      display: flex; gap: 0;
+      background: var(--steam);
+      border-radius: 10px; padding: 4px;
+      margin-bottom: 24px;
+    }
+    .mode-tab {
+      flex: 1; padding: 9px 12px; border-radius: 8px;
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); cursor: pointer; border: none;
+      background: transparent; transition: all 0.2s; text-align: center;
+    }
+    .mode-tab.active {
+      background: var(--paper); color: var(--brown);
+      box-shadow: 0 1px 4px rgba(92,51,23,0.1);
+    }
+
+    /* ── FORM FIELDS ── */
+    .form-group { margin-bottom: 18px; }
+    .form-label {
+      display: block;
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 7px;
+    }
+    .form-input {
+      width: 100%; padding: 13px 16px;
+      background: var(--bg);
+      border: 1.5px solid var(--divider);
+      border-radius: var(--r);
+      font-family: 'DM Sans', sans-serif; font-size: 1rem;
+      color: var(--dark); outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--light); font-style: italic; }
+    .form-input.error { border-color: #c0392b; }
+
+    .form-error {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: #c0392b; margin-top: 5px; display: none;
+    }
+    .form-error.show { display: block; }
+
+    /* Show/hide password toggle */
+    .password-wrap { position: relative; }
+    .toggle-pw {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--light); background: none; border: none;
+      cursor: pointer; transition: color 0.2s; padding: 4px;
+    }
+    .toggle-pw:hover { color: var(--mid); }
+
+    /* Forgot password link */
+    .forgot-link {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--light); text-decoration: none;
+      float: right; margin-top: -24px; margin-bottom: 18px;
+      display: block; transition: color 0.2s;
+    }
+    .forgot-link:hover { color: var(--accent); }
+
+    /* ── OR DIVIDER ── */
+    .or-divider {
+      display: flex; align-items: center; gap: 12px; margin: 20px 0;
+    }
+    .or-divider::before, .or-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--divider);
+    }
+    .or-divider span {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--light);
+    }
+
+    /* ── SUBMIT ── */
+    .btn-submit {
+      width: 100%; padding: 15px;
+      background: var(--brown); color: var(--paper);
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border: none; border-radius: 50px; cursor: pointer;
+      transition: all 0.2s; margin-top: 4px;
+    }
+    .btn-submit:hover { background: var(--accent); }
+    .btn-submit:disabled { opacity: 0.45; pointer-events: none; }
+    .btn-submit.ghost {
+      background: transparent;
+      border: 1.5px solid var(--divider);
+      color: var(--brown); margin-top: 10px;
+    }
+    .btn-submit.ghost:hover { border-color: var(--brown); background: var(--bg); }
+
+    /* ── GLOBAL ERROR ── */
+    .form-global-error {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: #c0392b; text-align: center;
+      margin-top: 14px; min-height: 18px;
+    }
+
+    /* ── SUCCESS STATE ── */
+    .success-state {
+      display: none; text-align: center; padding: 16px 0;
+    }
+    .success-icon { font-size: 2.6rem; margin-bottom: 14px; display: block; }
+    .success-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.3rem; color: var(--brown); margin-bottom: 8px;
+    }
+    .success-title em { font-style: italic; }
+    .success-body { font-size: 0.88rem; color: var(--mid); line-height: 1.65; }
+
+    /* ── SIGNUP LINK ── */
+    .signup-link {
+      text-align: center; margin-top: 22px;
+      font-size: 0.88rem; color: var(--mid);
+    }
+    .signup-link a {
+      color: var(--brown); text-decoration: none;
+      border-bottom: 1px solid var(--divider); transition: border-color 0.2s;
+    }
+    .signup-link a:hover { border-color: var(--brown); }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--dark); padding: 28px 24px; text-align: center;
+    }
+    .footer-links {
+      display: flex; justify-content: center; gap: 24px; list-style: none; flex-wrap: wrap;
+    }
+    .footer-links a {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(201,168,130,0.3); text-decoration: none; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--light); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
+  <a href="index.html" class="nav-back">← Back to home</a>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-content">
+    <span class="page-header-tag">Welcome back</span>
+    <h1>Log in to<br><em>CupIT</em></h1>
+    <p class="page-header-sub">Your sessions are waiting.</p>
+  </div>
+</div>
+
+<div class="form-container">
+  <div class="form-card">
+
+    <!-- Mode tabs -->
+    <div class="mode-tabs" role="tablist">
+      <button class="mode-tab active" id="tab-pw" onclick="switchMode('password')" role="tab">Email & password</button>
+      <button class="mode-tab" id="tab-magic" onclick="switchMode('magic')" role="tab">Magic link</button>
+    </div>
+
+    <!-- Success state -->
+    <div class="success-state" id="success-state">
+      <span class="success-icon">✉️</span>
+      <h2 class="success-title">Check your <em>inbox</em></h2>
+      <p class="success-body" id="success-body">We've sent a magic link to your email. Click it to log straight in.</p>
+    </div>
+
+    <!-- Email/password form -->
+    <div id="pw-form">
+      <div class="form-group">
+        <label class="form-label" for="pw-email">Email address</label>
+        <input type="email" id="pw-email" class="form-input"
+          placeholder="you@example.com" autocomplete="email" />
+        <p class="form-error" id="pw-email-error">Please enter a valid email address</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="pw-password">Password</label>
+        <div class="password-wrap">
+          <input type="password" id="pw-password" class="form-input"
+            placeholder="Your password" autocomplete="current-password" />
+          <button class="toggle-pw" type="button" onclick="togglePassword('pw-password', this)">Show</button>
+        </div>
+        <p class="form-error" id="pw-password-error">Please enter your password</p>
+      </div>
+
+      <a href="#" class="forgot-link">Forgot password?</a>
+
+      <button class="btn-submit" onclick="submitPassword()">Log in →</button>
+
+      <div class="or-divider"><span>or</span></div>
+
+      <button class="btn-submit ghost" onclick="switchMode('magic')">Send me a magic link instead</button>
+    </div>
+
+    <!-- Magic link form -->
+    <div id="magic-form" style="display:none">
+      <p style="font-size:0.9rem;color:var(--mid);line-height:1.7;margin-bottom:20px;font-weight:300">
+        Enter your email and we'll send you a secure link. Click it and you're straight in.
+      </p>
+      <div class="form-group">
+        <label class="form-label" for="magic-email">Email address</label>
+        <input type="email" id="magic-email" class="form-input"
+          placeholder="you@example.com" autocomplete="email" />
+        <p class="form-error" id="magic-email-error">Please enter a valid email address</p>
+      </div>
+      <button class="btn-submit" onclick="submitMagic()">Send magic link →</button>
+
+      <div class="or-divider"><span>or</span></div>
+
+      <button class="btn-submit ghost" onclick="switchMode('password')">Log in with password instead</button>
+    </div>
+
+    <p class="form-global-error" id="form-global-error"></p>
+
+    <p class="signup-link">Don't have an account? <a href="signup.html">Sign up</a></p>
+
+  </div>
+</div>
+
+<footer>
+  <ul class="footer-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="familiar.html">For cuppers</a></li>
+    <li><a href="signup.html">Sign up</a></li>
+  </ul>
+</footer>
+
+<script>
+  // ── ANALYTICS ──
+  // TODO: replace console.log with Supabase insert when ready
+  function track(event, metadata = {}) {
+    console.log('[CupIT analytics]', event, metadata);
+  }
+
+  // ── AUTH CHECK ──
+  // If already logged in, go straight to dashboard
+  (async () => {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (session) window.location.href = 'dashboard.html';
+  })();
+
+  track('page_view', { page: 'login' });
+
+  let currentMode = 'password';
+
+  // ── MODE SWITCHING ──
+  function switchMode(mode) {
+    track('login_mode_switched', { to: mode });
+    currentMode = mode;
+    document.getElementById('tab-pw').classList.toggle('active', mode === 'password');
+    document.getElementById('tab-magic').classList.toggle('active', mode === 'magic');
+    document.getElementById('pw-form').style.display    = mode === 'password' ? 'block' : 'none';
+    document.getElementById('magic-form').style.display = mode === 'magic'    ? 'block' : 'none';
+    clearFormError();
+  }
+
+  // ── HELPERS ──
+  function validateEmail(val) {
+    return val.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+  }
+
+  function showFormError(msg) {
+    document.getElementById('form-global-error').textContent = msg;
+  }
+
+  function clearFormError() {
+    document.getElementById('form-global-error').textContent = '';
+  }
+
+  function setLoading(loading) {
+    document.querySelectorAll('.btn-submit').forEach(btn => {
+      btn.disabled = loading;
+      if (loading && !btn.classList.contains('ghost')) btn.textContent = 'Please wait...';
+    });
+  }
+
+  // Shows/hides password field content
+  function togglePassword(id, btn) {
+    const input = document.getElementById(id);
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? 'Hide' : 'Show';
+  }
+
+  // ── PASSWORD LOGIN ──
+  async function submitPassword() {
+    clearFormError();
+    let valid = true;
+
+    const email = document.getElementById('pw-email');
+    const pw    = document.getElementById('pw-password');
+
+    if (!validateEmail(email.value)) {
+      email.classList.add('error');
+      document.getElementById('pw-email-error').classList.add('show');
+      valid = false;
+    } else {
+      email.classList.remove('error');
+      document.getElementById('pw-email-error').classList.remove('show');
+    }
+
+    if (!pw.value.trim()) {
+      pw.classList.add('error');
+      document.getElementById('pw-password-error').classList.add('show');
+      valid = false;
+    } else {
+      pw.classList.remove('error');
+      document.getElementById('pw-password-error').classList.remove('show');
+    }
+
+    if (!valid) return;
+
+    setLoading(true);
+
+    try {
+      const { error } = await window.supabaseClient.auth.signInWithPassword({
+        email:    email.value.trim(),
+        password: pw.value,
+      });
+
+      if (error) {
+        // Keep error messages user-friendly — don't expose internals
+        const msg = error.message.includes('Invalid login')
+          ? 'Incorrect email or password. Please try again.'
+          : error.message;
+        showFormError(msg);
+        setLoading(false);
+        return;
+      }
+
+      track('login_success', { method: 'password' });
+      // Redirect to dashboard on success
+      window.location.href = 'dashboard.html';
+
+    } catch (err) {
+      showFormError('Something went wrong. Please try again.');
+      console.error(err);
+      setLoading(false);
+    }
+  }
+
+  // ── MAGIC LINK LOGIN ──
+  async function submitMagic() {
+    clearFormError();
+
+    const email = document.getElementById('magic-email');
+    if (!validateEmail(email.value)) {
+      email.classList.add('error');
+      document.getElementById('magic-email-error').classList.add('show');
+      return;
+    }
+    email.classList.remove('error');
+    document.getElementById('magic-email-error').classList.remove('show');
+
+    setLoading(true);
+
+    try {
+      const { error } = await window.supabaseClient.auth.signInWithOtp({
+        email: email.value.trim(),
+        options: {
+          emailRedirectTo: 'https://richie990.github.io/CupIT/dashboard.html',
+          shouldCreateUser: false, // login only — don't create new accounts here
+        }
+      });
+
+      if (error) {
+        showFormError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      track('login_success', { method: 'magic' });
+      showSuccess(email.value.trim());
+
+    } catch (err) {
+      showFormError('Something went wrong. Please try again.');
+      console.error(err);
+      setLoading(false);
+    }
+  }
+
+  // ── SUCCESS STATE (magic link only) ──
+  function showSuccess(email) {
+    document.getElementById('pw-form').style.display = 'none';
+    document.getElementById('magic-form').style.display = 'none';
+    document.querySelector('.mode-tabs').style.display = 'none';
+    document.getElementById('form-global-error').style.display = 'none';
+    document.querySelector('.signup-link').style.display = 'none';
+    document.getElementById('success-body').innerHTML =
+      `We've sent a magic link to <strong>${email}</strong>. Click it to log straight into your dashboard.`;
+    document.getElementById('success-state').style.display = 'block';
+  }
+</script>
+</body>
+</html>
