@@ -599,7 +599,7 @@
       .from('cupping_sessions')
       .select('id, session_name, session_date, coffees, params_active, timer_enabled')
       .eq('user_id', userId)
-      .order('session_date', { ascending: false });
+      .order('id', { ascending: false });
 
     if (error) {
       console.error('Error loading sessions:', error.message);
