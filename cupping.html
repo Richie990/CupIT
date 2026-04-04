@@ -544,10 +544,15 @@
 
   // ══════════════════════════════════════════════════════════
   //  INIT
-  //  Called once on page load. Seeds two blank coffees so the
-  //  setup screen doesn't look empty.
+  //  Check auth then seed two blank coffees for setup.
   // ══════════════════════════════════════════════════════════
-  function init() {
+  async function init() {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) {
+      window.location.href = 'signup.html';
+      return;
+    }
+    track('page_view', { page: 'cupping' });
     buildParamGrid();
     addCoffee();
     addCoffee();
@@ -1007,16 +1012,41 @@
     window.scrollTo({ top:0, behavior:'smooth' });
   }
 
-  // Currently shows a confirmation screen only.
-  // TODO: Replace with a real API call to persist the session.
-  function saveSession() {
+  // Saves the session to Supabase cupping_sessions table.
+  async function saveSession() {
     const name = document.getElementById('session-name').value.trim() || 'Untitled session';
-    // Track when a session is saved — useful for measuring completion rate vs started
+
+    // Get current authenticated user
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) {
+      window.location.href = 'signup.html';
+      return;
+    }
+
     track('session_saved', {
       coffee_count: coffees.length,
       params_active: [...activeParams],
       total_flavours: coffees.reduce((n, c) => n + (c.data.flavours?.length || 0), 0),
     });
+
+    // Insert into cupping_sessions — coffees array stored as JSONB
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .insert({
+        user_id:       session.user.id,
+        session_name:  name,
+        session_date:  new Date().toISOString().split('T')[0],
+        coffees:       coffees,
+        params_active: [...activeParams],
+        timer_enabled: useTimer,
+      });
+
+    if (error) {
+      console.error('Error saving session:', error.message);
+      alert('There was a problem saving your session. Please try again.');
+      return;
+    }
+
     document.getElementById('saved-sub').textContent =
       `"${name}" with ${coffees.length} coffee${coffees.length>1?'s':''} has been saved to your journal.`;
     goTo('saved');

@@ -377,97 +377,88 @@
     console.log('[CupIT analytics]', event, metadata);
   }
 
-  // Track page view on load
-  track('page_view', { page: 'dashboard' });
-
   // ══════════════════════════════════════════════════════════
-  //  MOCK DATA
-  //  Replace loadUser() and loadRecentSessions() with real
-  //  API calls once auth and session storage are wired up.
+  //  AUTH PROTECTION
+  //  Redirect to signup if no active session.
+  //  All protected pages (dashboard, cupping, history) do this.
   // ══════════════════════════════════════════════════════════
-
-  // User object — replace with real auth session data
-  const MOCK_USER = {
-    name: 'Richard',
-  };
-
-  // Recent sessions — replace with API fetch of latest 5 sessions.
-  // Shape must match the session objects in history.html's MOCK_SESSIONS.
-  const MOCK_RECENT = [
-    {
-      id: 1,
-      name: 'Saturday morning — Kenyan naturals',
-      date: '2025-03-15',
-      coffees: [
-        { name: 'Kamwangi AB',  data: { scores: { Acidity:8.5, Body:7.5, Sweetness:8, Finish:8, Balance:8 }, flavours: ['Blackberry','Lemon'] } },
-        { name: 'Gakuyuini AA', data: { scores: { Acidity:9,   Body:7,   Sweetness:7.5, Finish:8.5, Balance:8.5 }, flavours: ['Raspberry','Black Tea'] } },
-      ]
-    },
-    {
-      id: 2,
-      name: 'Ethiopian batch comparison — Q3',
-      date: '2025-03-08',
-      coffees: [
-        { name: 'Yirgacheffe Lot 12', data: { scores: { Acidity:7, Body:8, Sweetness:9, Finish:8.5, Balance:8 }, flavours: ['Blueberry','Caramel'] } },
-        { name: 'Yirgacheffe Lot 13', data: { scores: { Acidity:7.5, Body:7.5, Sweetness:8.5, Finish:8, Balance:7.5 }, flavours: ['Passion Fruit'] } },
-        { name: 'Yirgacheffe Washed', data: { scores: { Acidity:8.5, Body:6.5, Sweetness:7.5, Finish:8, Balance:8 }, flavours: ['Jasmine','Lemon'] } },
-      ]
-    },
-    {
-      id: 3,
-      name: 'Quick Tuesday cup',
-      date: '2025-03-04',
-      coffees: [
-        { name: 'Colombia Huila Anaerobic', data: { scores: { Acidity:7, Body:8.5, Sweetness:9, Finish:7.5, Balance:7.5 }, flavours: ['Caramel','Dark Chocolate'] } },
-      ]
-    },
-    {
-      id: 4,
-      name: 'Gesha comparison',
-      date: '2025-02-22',
-      coffees: [
-        { name: 'Panama Gesha Natural',  data: { scores: { Acidity:8, Body:7, Sweetness:9.5, Finish:9.5, Balance:9 }, flavours: ['Jasmine','Peach'] } },
-        { name: 'Ethiopia Gesha Washed', data: { scores: { Acidity:8.5, Body:6.5, Sweetness:8.5, Finish:9, Balance:8.5 }, flavours: ['Orange Blossom','Lemon'] } },
-      ]
-    },
-    {
-      id: 5,
-      name: 'Monday roastery QC — Batch 24-12',
-      date: '2025-02-17',
-      coffees: [
-        { name: 'Guatemala Huehuetenango', data: { scores: { Acidity:6.5, Body:8, Sweetness:7, Finish:6.5, Balance:7 }, flavours: ['Brown Sugar','Almond'] } },
-      ]
-    },
-  ];
-
+  async function requireAuth() {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) {
+      window.location.href = 'signup.html';
+      return null;
+    }
+    return session;
+  }
 
   // ══════════════════════════════════════════════════════════
   //  INIT
   // ══════════════════════════════════════════════════════════
-  function init() {
+  async function init() {
+    const session = await requireAuth();
+    if (!session) return;
+
+    track('page_view', { page: 'dashboard' });
+
     setGreeting();
-    loadUser();
-    renderRecentSessions();
+    await loadUser(session.user.id);
+    await loadRecentSessions(session.user.id);
   }
 
-  // Sets the time-of-day greeting label (morning/afternoon/evening)
+  // Sets the time-of-day greeting label
   function setGreeting() {
     const hour = new Date().getHours();
     const label = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     document.getElementById('greeting-eyebrow').textContent = label;
   }
 
-  // Populates the user name in the greeting.
-  // Replace with real auth session lookup.
-  function loadUser() {
-    document.getElementById('user-name').textContent = MOCK_USER.name;
+  // Loads the user's name from the profiles table
+  async function loadUser(userId) {
+    const { data, error } = await window.supabaseClient
+      .from('profiles')
+      .select('name')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error loading profile:', error.message);
+      document.getElementById('user-name').textContent = 'there';
+      return;
+    }
+
+    document.getElementById('user-name').textContent = data.name || 'there';
   }
 
-  // Renders the 3 most recent sessions as compact rows.
-  function renderRecentSessions() {
+  // Loads the 5 most recent sessions from cupping_sessions
+  async function loadRecentSessions(userId) {
+    const { data, error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .select('id, session_name, session_date, coffees')
+      .eq('user_id', userId)
+      .order('session_date', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error('Error loading sessions:', error.message);
+      return;
+    }
+
+    // Map snake_case DB columns back to the shape renderRecentSessions expects
+    const sessions = (data || []).map(s => ({
+      id:      s.id,
+      name:    s.session_name,
+      date:    s.session_date,
+      coffees: s.coffees || [],
+    }));
+
+    renderRecentSessions(sessions);
+  }
+
+  // Renders recent session rows — accepts sessions array
+  function renderRecentSessions(sessions) {
     const list = document.getElementById('recent-list');
 
-    if (!MOCK_RECENT.length) {
+    if (!sessions.length) {
       list.innerHTML = `
         <div class="recent-empty">
           <p>No sessions yet. <a href="cupping.html">Start your first cupping →</a></p>
@@ -475,15 +466,12 @@
       return;
     }
 
-    list.innerHTML = MOCK_RECENT.map(s => {
+    list.innerHTML = sessions.map(s => {
       const avg = sessionAvgScore(s);
       const scoreClass = avg === null ? 'none' : avg >= 8 ? 'high' : avg >= 7 ? 'mid' : 'low';
       const scoreText  = avg !== null ? avg.toFixed(1) : '—';
-
-      // Show top 2 flavours across all coffees in the session
-      const allFlavours = [...new Set(s.coffees.flatMap(c => c.data.flavours || []))];
+      const allFlavours = [...new Set(s.coffees.flatMap(c => c.data?.flavours || []))];
       const topFlavours = allFlavours.slice(0, 2);
-
       const coffeeCount = s.coffees.length;
 
       return `
@@ -502,26 +490,22 @@
     }).join('');
   }
 
-
   // ══════════════════════════════════════════════════════════
-  //  UTILITIES — same as history.html
+  //  UTILITIES
   // ══════════════════════════════════════════════════════════
 
-  // Average score across all coffees in a session
   function sessionAvgScore(session) {
-    const allScores = session.coffees.flatMap(c => Object.values(c.data.scores || {}));
+    const allScores = session.coffees.flatMap(c => Object.values(c.data?.scores || {}));
     if (!allScores.length) return null;
     return allScores.reduce((a, b) => a + b, 0) / allScores.length;
   }
 
-  // Formats ISO date string to readable display
   function formatDate(iso) {
     return new Date(iso + 'T00:00:00').toLocaleDateString('en-IE', {
       day: 'numeric', month: 'short', year: 'numeric'
     });
   }
 
-  // Prevents XSS when inserting user data into innerHTML
   function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }

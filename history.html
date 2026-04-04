@@ -749,16 +749,47 @@
   // ══════════════════════════════════════════════════════════
   //  INITIALISE
   // ══════════════════════════════════════════════════════════
-  function init() {
-    loadSessions();
+  async function init() {
+    // Auth protection — redirect if not logged in
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) {
+      window.location.href = 'signup.html';
+      return;
+    }
+
+    track('page_view', { page: 'history' });
+
+    await loadSessions(session.user.id);
     populateRoasterFilter();
     renderTable();
   }
 
-  // Replace the body of this function with a real API call.
-  // e.g. const res = await fetch('/api/sessions'); sessions = await res.json();
-  function loadSessions() {
-    sessions = MOCK_SESSIONS;
+  // Fetches all sessions for the current user from Supabase.
+  // Maps snake_case DB columns to the shape the rest of the page expects.
+  async function loadSessions(userId) {
+    const { data, error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .select('id, session_name, session_date, coffees, params_active, timer_enabled')
+      .eq('user_id', userId)
+      .order('session_date', { ascending: false });
+
+    if (error) {
+      console.error('Error loading sessions:', error.message);
+      sessions = [];
+      return;
+    }
+
+    // Map DB rows to the shape used throughout history.html
+    sessions = (data || []).map(s => ({
+      id:      s.id,
+      name:    s.session_name,
+      date:    s.session_date,
+      coffees: s.coffees || [],
+    }));
+
+    // Update session count in header
+    document.getElementById('session-count').textContent =
+      `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
   }
 
   // Extracts all unique roaster values from session data

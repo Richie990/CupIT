@@ -570,8 +570,38 @@
     return val.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
   }
 
-  function submitPassword() {
+  // ── HELPERS ──
+
+  // Shows a dismissable error message below the form
+  function showFormError(message) {
+    let el = document.getElementById('form-global-error');
+    if (!el) {
+      el = document.createElement('p');
+      el.id = 'form-global-error';
+      el.style.cssText = 'font-family:"DM Mono",monospace;font-size:0.62rem;letter-spacing:0.06em;text-transform:uppercase;color:#c0392b;text-align:center;margin-top:14px';
+      document.querySelector('.form-card').appendChild(el);
+    }
+    el.textContent = message;
+  }
+
+  function clearFormError() {
+    const el = document.getElementById('form-global-error');
+    if (el) el.textContent = '';
+  }
+
+  // Disables/enables the submit button and shows loading state
+  function setLoading(loading) {
+    const btns = document.querySelectorAll('.btn-submit');
+    btns.forEach(btn => {
+      btn.disabled = loading;
+      if (loading) btn.textContent = 'Please wait...';
+    });
+  }
+
+  // ── PASSWORD SIGN UP ──
+  async function submitPassword() {
     if (!validateSharedFields()) return;
+    clearFormError();
     let valid = true;
 
     const email = document.getElementById('pw-email');
@@ -588,7 +618,7 @@
       document.getElementById('pw-email-error').classList.remove('show');
     }
 
-    // Password
+    // Password length
     if (pw.value.length < 8) {
       pw.classList.add('error');
       document.getElementById('pw-password-error').classList.add('show');
@@ -598,7 +628,7 @@
       document.getElementById('pw-password-error').classList.remove('show');
     }
 
-    // Confirm
+    // Confirm match
     if (pw.value !== conf.value || !conf.value) {
       conf.classList.add('error');
       document.getElementById('pw-confirm-error').classList.add('show');
@@ -610,11 +640,50 @@
 
     if (!valid) return;
 
-    showSuccess(email.value.trim(), 'password');
+    setLoading(true);
+
+    try {
+      // Create the auth account in Supabase
+      const { data, error } = await window.supabaseClient.auth.signUp({
+        email: email.value.trim(),
+        password: pw.value,
+        options: {
+          emailRedirectTo: 'https://richie990.github.io/CupIT/dashboard.html',
+        }
+      });
+
+      if (error) {
+        showFormError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      // Save the profile details to the profiles table
+      if (data.user) {
+        await window.supabaseClient.from('profiles').update({
+          name:       document.getElementById('f-name').value.trim(),
+          company:    document.getElementById('f-company').value.trim() || null,
+          occupation: document.getElementById('f-occupation').value.trim() || null,
+          use_type:   selectedUse,
+        }).eq('user_id', data.user.id);
+      }
+
+      track('signup_submitted', { method: 'password', use_type: selectedUse });
+      showSuccess(email.value.trim(), 'password');
+
+    } catch (err) {
+      showFormError('Something went wrong. Please try again.');
+      console.error(err);
+    }
+
+    setLoading(false);
   }
 
-  function submitMagic() {
+  // ── MAGIC LINK SIGN UP ──
+  async function submitMagic() {
     if (!validateSharedFields()) return;
+    clearFormError();
+
     const email = document.getElementById('magic-email');
     if (!validateEmail(email.value)) {
       email.classList.add('error');
@@ -623,13 +692,41 @@
     }
     email.classList.remove('error');
     document.getElementById('magic-email-error').classList.remove('show');
-    showSuccess(email.value.trim(), 'magic');
+
+    setLoading(true);
+
+    try {
+      // Send magic link via Supabase
+      const { error } = await window.supabaseClient.auth.signInWithOtp({
+        email: email.value.trim(),
+        options: {
+          emailRedirectTo: 'https://richie990.github.io/CupIT/dashboard.html',
+          shouldCreateUser: true,
+        }
+      });
+
+      if (error) {
+        showFormError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      // Save profile details — we don't have a user id yet for magic link
+      // so we store them temporarily and save after the user clicks the link
+      // TODO: handle profile save on magic link callback
+      track('signup_submitted', { method: 'magic', use_type: selectedUse });
+      showSuccess(email.value.trim(), 'magic');
+
+    } catch (err) {
+      showFormError('Something went wrong. Please try again.');
+      console.error(err);
+    }
+
+    setLoading(false);
   }
 
+  // ── SUCCESS STATE ──
   function showSuccess(email, mode) {
-    // Track successful sign up attempt (email not sent to analytics — privacy)
-    track('signup_submitted', { method: mode, use_type: selectedUse });
-
     document.getElementById('pw-form').style.display = 'none';
     document.getElementById('magic-form').style.display = 'none';
     document.getElementById('shared-fields').style.display = 'none';
