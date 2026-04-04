@@ -556,6 +556,8 @@
     }
 
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -678,6 +680,15 @@
 
 
 <script>
+  // ── ANALYTICS ──
+  // TODO: replace console.log with Supabase insert when ready
+  function track(event, metadata = {}) {
+    console.log('[CupIT analytics]', event, metadata);
+  }
+
+  // Track page view on load
+  track('page_view', { page: 'guide' });
+
   const STEPS = [
     {
       emoji: '🫘',
@@ -1176,6 +1187,7 @@
   }
 
   function finishCupping() {
+    track('guide_walkthrough_completed', { flavours_picked: flavourPicks.length });
     const nextBtn = document.getElementById('btn-next');
     nextBtn.textContent = "I\'ve done this →";
     nextBtn.className = 'btn-next';
@@ -1287,6 +1299,7 @@
   }
 
   function startWalkthrough() {
+    track('guide_walkthrough_started');
     current = 0;
     flavourStepActive = false;
     onNameStep = false;

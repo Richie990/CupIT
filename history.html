@@ -443,6 +443,8 @@
     }
     tbody tr { animation: fadeUp 0.2s ease both; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -554,6 +556,15 @@
 
 
 <script>
+  // ── ANALYTICS ──
+  // TODO: replace console.log with Supabase insert when ready
+  function track(event, metadata = {}) {
+    console.log('[CupIT analytics]', event, metadata);
+  }
+
+  // Track page view on load
+  track('page_view', { page: 'history' });
+
   // ══════════════════════════════════════════════════════════
   //  MOCK DATA
   //  Replace loadSessions() with a real API fetch when the
@@ -810,6 +821,7 @@
   }
 
   function clearFilters() {
+    track('history_filters_cleared');
     document.getElementById('filter-search').value    = '';
     document.getElementById('filter-roaster').value  = '';
     document.getElementById('filter-date-from').value = '';
@@ -830,6 +842,7 @@
   // ══════════════════════════════════════════════════════════
   function setSort(col) {
     // Toggle direction if same column, otherwise default to descending for date/score
+    track('history_sorted', { column: col });
     if (sortCol === col) {
       sortAsc = !sortAsc;
     } else {
@@ -931,6 +944,12 @@
     if (!session) return;
 
     activeDrawerId = id;
+
+    // Track when a user opens a session detail drawer
+    track('session_detail_opened', {
+      session_id: id,
+      coffee_count: session.coffees.length,
+    });
 
     // Highlight selected row
     document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));

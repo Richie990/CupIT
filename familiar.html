@@ -333,6 +333,8 @@
       .how-grid { grid-template-columns: 1fr; }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -476,6 +478,15 @@
 </footer>
 
 <script>
+  // ── ANALYTICS ──
+  // TODO: replace console.log with Supabase insert when ready
+  function track(event, metadata = {}) {
+    console.log('[CupIT analytics]', event, metadata);
+  }
+
+  // Track page view on load
+  track('page_view', { page: 'familiar' });
+
   const cards = document.querySelectorAll('.how-card, .detail-row');
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((e, i) => {

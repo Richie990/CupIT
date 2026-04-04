@@ -336,6 +336,8 @@
       to   { opacity: 1; transform: translateY(0); }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -461,6 +463,15 @@
 
 
 <script>
+  // ── ANALYTICS ──
+  // TODO: replace console.log with Supabase insert when ready
+  function track(event, metadata = {}) {
+    console.log('[CupIT analytics]', event, metadata);
+  }
+
+  // Track page view on load
+  track('page_view', { page: 'cupping' });
+
   // ══════════════════════════════════════════════════════════
   //  DATA DEFINITIONS
   //  These arrays define what the app knows about. Edit here
@@ -681,6 +692,12 @@
       return;
     }
     coffees = coffees.filter(c => c.name.trim());
+    // Track when a cupping session is actually started
+    track('session_started', {
+      coffee_count: coffees.length,
+      params_active: [...activeParams],
+      timer_enabled: useTimer,
+    });
     buildCuppingView();
     // Show or hide the timer widget based on setup choice
     document.getElementById('timer-widget').style.display = useTimer ? 'block' : 'none';
@@ -994,6 +1011,12 @@
   // TODO: Replace with a real API call to persist the session.
   function saveSession() {
     const name = document.getElementById('session-name').value.trim() || 'Untitled session';
+    // Track when a session is saved — useful for measuring completion rate vs started
+    track('session_saved', {
+      coffee_count: coffees.length,
+      params_active: [...activeParams],
+      total_flavours: coffees.reduce((n, c) => n + (c.data.flavours?.length || 0), 0),
+    });
     document.getElementById('saved-sub').textContent =
       `"${name}" with ${coffees.length} coffee${coffees.length>1?'s':''} has been saved to your journal.`;
     goTo('saved');

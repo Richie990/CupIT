@@ -339,6 +339,8 @@
     }
     .footer-links a:hover { color: var(--light); }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -487,6 +489,15 @@
 </footer>
 
 <script>
+  // ── ANALYTICS ──
+  // TODO: replace console.log with Supabase insert when ready
+  function track(event, metadata = {}) {
+    console.log('[CupIT analytics]', event, metadata);
+  }
+
+  // Track page view on load
+  track('page_view', { page: 'signup' });
+
   let currentMode = 'password';
   let selectedUse = '';
 
@@ -516,6 +527,7 @@
   }
 
   function switchMode(mode) {
+    track('signup_mode_switched', { to: mode });
     currentMode = mode;
     document.getElementById('tab-pw').classList.toggle('active', mode === 'password');
     document.getElementById('tab-magic').classList.toggle('active', mode === 'magic');
@@ -615,6 +627,9 @@
   }
 
   function showSuccess(email, mode) {
+    // Track successful sign up attempt (email not sent to analytics — privacy)
+    track('signup_submitted', { method: mode, use_type: selectedUse });
+
     document.getElementById('pw-form').style.display = 'none';
     document.getElementById('magic-form').style.display = 'none';
     document.getElementById('shared-fields').style.display = 'none';
