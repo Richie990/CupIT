@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — For Experienced Cuppers  (familiar.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    A marketing/pitch page targeting people who already know how
+    to cup and want a proper home to log and track their sessions.
+    Reached from the homepage "Familiar with cupping" button.
+
+  GOAL:
+    Convert experienced cuppers into signed-up users by clearly
+    explaining what CupIT offers them: a cupping journal, flavour
+    tracking, scoring, search and compare — all in one place.
+
+  PAGE SECTIONS (in order):
+    NAV           Dark nav bar, back to homepage
+    HERO          Dark header with pitch headline and CTA → signup.html
+    VISION        Plain-English explanation of the problem being solved
+                  (lost notebooks, no palate history) and how CupIT fixes it
+    HOW IT WORKS  Six feature cards on dark background (scroll-reveal)
+    DETAIL        Four detail rows: free tier, cross-device, data privacy,
+                  and a note that we're building openly
+    CTA BAND      Second push to sign up
+    FOOTER
+
+  DESIGN NOTES:
+    - Dark header → warm cream body (mix theme).
+    - Feature cards and detail rows use IntersectionObserver for
+      staggered scroll-reveal animations.
+    - Consistent with homepage colour palette and font system.
+
+  FUTURE / TODO:
+    - Once auth is live, the CTA buttons should check if the user
+      is already logged in and redirect to their dashboard instead.
+    - The "We're building this openly" detail row should eventually
+      link to a changelog or roadmap page.
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1c0f05" />
+  <meta name="description" content="A proper home for your cupping sessions. Log, track and review every coffee you've ever tasted." />
+  <title>For Cuppers — CupIT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:      #faf6ee;
+      --paper:   #fff9f0;
+      --dark:    #1c0f05;
+      --roast:   #3b1a08;
+      --brown:   #5c3317;
+      --mid:     #9b6b47;
+      --light:   #c9a882;
+      --accent:  #b85c2b;
+      --cream:   #f5e9d0;
+      --steam:   #e8ddd0;
+      --divider: rgba(92,51,23,0.12);
+      --r:       16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Crimson Pro', Georgia, serif;
+      background: var(--bg);
+      color: var(--dark);
+      font-size: 18px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Grain */
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: var(--dark);
+      padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem; color: var(--light);
+      text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-back {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(201,168,130,0.4); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-back:hover { color: var(--light); }
+
+    /* ── DARK HERO ── */
+    .hero {
+      background: var(--dark);
+      padding: 72px 24px 80px;
+      text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 110%, rgba(184,92,43,0.3) 0%, transparent 65%);
+    }
+    .hero-content { position: relative; z-index: 1; max-width: 620px; margin: 0 auto; }
+
+    .hero-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 22px; display: block;
+    }
+    .hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2.2rem, 6vw, 3.6rem);
+      font-weight: 400; line-height: 1.15;
+      color: var(--cream); margin-bottom: 20px;
+    }
+    .hero h1 em { font-style: italic; color: var(--light); }
+    .hero-sub {
+      font-size: 1.05rem; color: rgba(245,233,208,0.6);
+      line-height: 1.8; font-weight: 300;
+      max-width: 500px; margin: 0 auto 36px;
+    }
+    .hero-sub strong { color: rgba(245,233,208,0.85); font-weight: 400; }
+    .btn-hero-cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--accent); color: var(--cream);
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 15px 34px; border-radius: 50px; text-decoration: none;
+      box-shadow: 0 8px 28px rgba(184,92,43,0.35);
+      transition: all 0.2s;
+    }
+    .btn-hero-cta:hover { background: #c8682f; transform: translateY(-2px); }
+
+    /* ── LIGHT BODY ── */
+
+    /* Vision section */
+    .vision {
+      padding: 80px 24px;
+      max-width: 680px; margin: 0 auto;
+      text-align: center;
+    }
+    .section-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 16px; display: block;
+    }
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.7rem, 4vw, 2.4rem);
+      font-weight: 400; color: var(--brown);
+      line-height: 1.25; margin-bottom: 20px;
+    }
+    .section-title em { font-style: italic; }
+    .section-body {
+      font-size: 1rem; color: var(--mid);
+      line-height: 1.8; font-weight: 300; margin-bottom: 16px;
+    }
+    .section-body strong { color: var(--brown); font-weight: 400; }
+
+    /* Pull quote */
+    .pull-quote {
+      border-left: 3px solid var(--accent);
+      margin: 36px 0; padding: 14px 24px;
+      text-align: left;
+    }
+    .pull-quote p {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      font-style: italic; color: var(--brown); line-height: 1.55;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how-section {
+      background: var(--roast);
+      padding: 80px 24px;
+    }
+    .how-inner { max-width: 880px; margin: 0 auto; }
+    .how-header { text-align: center; margin-bottom: 52px; }
+    .how-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      font-weight: 400; color: var(--cream); line-height: 1.25;
+    }
+    .how-title em { font-style: italic; color: var(--light); }
+    .how-sub {
+      font-size: 0.95rem; color: rgba(245,233,208,0.45);
+      margin-top: 10px; font-weight: 300;
+    }
+
+    .how-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .how-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 18px; padding: 28px 24px;
+      opacity: 0; transform: translateY(16px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .how-card.visible { opacity: 1; transform: translateY(0); }
+    .how-card-num {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 14px; display: block;
+    }
+    .how-card-icon { font-size: 1.8rem; margin-bottom: 12px; display: block; }
+    .how-card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; font-weight: 400;
+      color: var(--cream); margin-bottom: 8px; line-height: 1.3;
+    }
+    .how-card-body {
+      font-size: 0.88rem; color: rgba(245,233,208,0.5);
+      line-height: 1.65; font-weight: 300;
+      font-family: 'Crimson Pro', serif;
+    }
+
+    /* ── DETAIL SECTION ── */
+    .detail-section {
+      padding: 80px 24px;
+      max-width: 680px; margin: 0 auto;
+    }
+    .detail-row {
+      display: flex; gap: 28px; align-items: flex-start;
+      padding: 28px 0; border-bottom: 1px solid var(--divider);
+      opacity: 0; transform: translateY(14px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .detail-row.visible { opacity: 1; transform: translateY(0); }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-icon {
+      font-size: 1.6rem; flex-shrink: 0; width: 44px;
+      text-align: center; margin-top: 4px;
+    }
+    .detail-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem; font-weight: 400;
+      color: var(--brown); margin-bottom: 6px;
+    }
+    .detail-body {
+      font-size: 0.92rem; color: var(--mid);
+      line-height: 1.7; font-weight: 300;
+    }
+
+    /* ── CTA BAND ── */
+    .cta-band {
+      background: var(--brown);
+      padding: 80px 24px; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .cta-band::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(184,92,43,0.4) 0%, transparent 65%);
+    }
+    .cta-content { position: relative; z-index: 1; max-width: 520px; margin: 0 auto; }
+    .cta-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--light); margin-bottom: 18px; display: block;
+    }
+    .cta-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.7rem, 4vw, 2.6rem);
+      font-weight: 400; color: var(--cream);
+      line-height: 1.2; margin-bottom: 14px;
+    }
+    .cta-title em { font-style: italic; }
+    .cta-sub {
+      font-size: 1rem; color: rgba(245,233,208,0.55);
+      line-height: 1.7; margin-bottom: 32px; font-weight: 300;
+    }
+    .btn-cta-primary {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--accent); color: var(--cream);
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 15px 34px; border-radius: 50px; text-decoration: none;
+      box-shadow: 0 8px 28px rgba(184,92,43,0.35); transition: all 0.2s;
+    }
+    .btn-cta-primary:hover { background: #c8682f; transform: translateY(-2px); }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--dark); padding: 40px 24px; text-align: center;
+    }
+    .footer-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem; color: var(--light);
+      margin-bottom: 6px; display: block;
+    }
+    .footer-logo em { font-style: italic; }
+    .footer-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: rgba(201,168,130,0.3); margin-bottom: 24px; display: block;
+    }
+    .footer-links {
+      display: flex; justify-content: center; gap: 24px;
+      list-style: none; flex-wrap: wrap;
+    }
+    .footer-links a {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(201,168,130,0.3); text-decoration: none; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--light); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .hero-content > * { animation: fadeUp 0.7s ease both; }
+    .hero-tag  { animation-delay: 0.1s; }
+    .hero h1   { animation-delay: 0.2s; }
+    .hero-sub  { animation-delay: 0.3s; }
+    .btn-hero-cta { animation-delay: 0.4s; }
+
+    @media (max-width: 560px) {
+      .how-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
+  <a href="index.html" class="nav-back">← Back to home</a>
+</nav>
+
+<!-- ── HERO ── -->
+<div class="hero">
+  <div class="hero-content">
+    <span class="hero-tag">For those who cup regularly</span>
+    <h1>Your cuppings.<br><em>All in one place.</em></h1>
+    <p class="hero-sub">
+      You already know how to taste. What you need is somewhere to <strong>log it, track it, and come back to it</strong> — every session, every coffee, every note you've ever made.
+    </p>
+    <a href="signup.html" class="btn-hero-cta">Create a free account →</a>
+  </div>
+</div>
+
+<!-- ── VISION ── -->
+<div class="vision">
+  <span class="section-tag">The idea</span>
+  <h2 class="section-title">A cupping journal that<br><em>actually works</em></h2>
+  <p class="section-body">
+    Most cuppers rely on notebooks, spreadsheets, or just memory. That means lost notes, forgotten coffees, and no real way to see how your palate is developing over time.
+  </p>
+  <p class="section-body">
+    CupIT is built to fix that. <strong>One place to log every session</strong> — the coffee, the roaster, the flavour notes, the score. Organised, searchable, and always with you.
+  </p>
+  <div class="pull-quote">
+    <p>"What did I think of that Ethiopian natural six months ago? Now you can actually find out."</p>
+  </div>
+  <p class="section-body">
+    No spreadsheets. No lost notebooks. Just a clean, simple journal that grows with your palate.
+  </p>
+</div>
+
+<!-- ── HOW IT WORKS ── -->
+<div class="how-section">
+  <div class="how-inner">
+    <div class="how-header">
+      <h2 class="how-title">Built around<br><em>how cuppers actually work</em></h2>
+      <p class="how-sub">Everything you need. Nothing you don't.</p>
+    </div>
+    <div class="how-grid">
+      <div class="how-card">
+        <span class="how-card-num">01</span>
+        <span class="how-card-icon">📓</span>
+        <p class="how-card-title">Log every cupping</p>
+        <p class="how-card-body">Record the coffee, roaster, origin, process and date. Add your flavour notes and a score. Done in under a minute.</p>
+      </div>
+      <div class="how-card">
+        <span class="how-card-num">02</span>
+        <span class="how-card-icon">🍓</span>
+        <p class="how-card-title">Pick your flavours</p>
+        <p class="how-card-body">Our flavour wheel makes it quick and consistent. Tap families, narrow it down, or keep it broad — your call every time.</p>
+      </div>
+      <div class="how-card">
+        <span class="how-card-num">03</span>
+        <span class="how-card-icon">⚖️</span>
+        <p class="how-card-title">Score your coffee</p>
+        <p class="how-card-body">Rate the attributes that matter to you — acidity, body, sweetness, finish. Build a consistent scoring habit over time.</p>
+      </div>
+      <div class="how-card">
+        <span class="how-card-num">04</span>
+        <span class="how-card-icon">📊</span>
+        <p class="how-card-title">Watch your palate grow</p>
+        <p class="how-card-body">See patterns emerge across your sessions. Which origins do you gravitate to? What processing styles suit your palate?</p>
+      </div>
+      <div class="how-card">
+        <span class="how-card-num">05</span>
+        <span class="how-card-icon">🔍</span>
+        <p class="how-card-title">Search and revisit</p>
+        <p class="how-card-body">Find any cupping in seconds. Search by coffee name, roaster, flavour note or score. Your history, always at hand.</p>
+      </div>
+      <div class="how-card">
+        <span class="how-card-num">06</span>
+        <span class="how-card-icon">☕</span>
+        <p class="how-card-title">Compare side by side</p>
+        <p class="how-card-body">Pull two cuppings together and compare them directly. Useful when you're deciding what to reorder — or just curious.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── DETAIL ── -->
+<div class="detail-section">
+  <span class="section-tag" style="display:block;margin-bottom:14px">What you get</span>
+  <h2 class="section-title" style="margin-bottom:36px">Everything in the details</h2>
+
+  <div class="detail-row">
+    <span class="detail-icon">🆓</span>
+    <div>
+      <p class="detail-title">Free to get started</p>
+      <p class="detail-body">Create an account and start logging straight away. We'll be clear about what's free and what's not when the time comes.</p>
+    </div>
+  </div>
+  <div class="detail-row">
+    <span class="detail-icon">📱</span>
+    <div>
+      <p class="detail-title">Works on any device</p>
+      <p class="detail-body">Log from your phone at the cupping table, review on your laptop later. Everything syncs automatically so your notes are wherever you are.</p>
+    </div>
+  </div>
+  <div class="detail-row">
+    <span class="detail-icon">🔒</span>
+    <div>
+      <p class="detail-title">Your data, yours</p>
+      <p class="detail-body">Your cupping notes are private by default. We don't sell your data, share it with roasters, or use it for anything other than making your journal better.</p>
+    </div>
+  </div>
+  <div class="detail-row">
+    <span class="detail-icon">🌱</span>
+    <div>
+      <p class="detail-title">We're building this openly</p>
+      <p class="detail-body">CupIT is early. Some features are still coming. But we'd rather have real cuppers using it and shaping it than wait until it's perfect.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── CTA BAND ── -->
+<div class="cta-band">
+  <div class="cta-content">
+    <span class="cta-tag">Ready to start logging</span>
+    <h2 class="cta-title">Your first session<br><em>is waiting</em></h2>
+    <p class="cta-sub">Create a free account and log your next cupping in under two minutes.</p>
+    <a href="signup.html" class="btn-cta-primary">Get started — it's free →</a>
+  </div>
+</div>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <span class="footer-logo">Cup<em>IT</em></span>
+  <span class="footer-tag">Home coffee cupping</span>
+  <ul class="footer-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="guide.html">Beginner's Guide</a></li>
+    <li><a href="signup.html">Sign up</a></li>
+  </ul>
+</footer>
+
+<script>
+  const cards = document.querySelectorAll('.how-card, .detail-row');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('visible'), i * 80);
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  cards.forEach(c => observer.observe(c));
+</script>
+</body>
+</html>

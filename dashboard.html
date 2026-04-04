@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Logged-In Dashboard  (dashboard.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    The home screen for users who have an account. Shown after
+    login instead of the public homepage. Greets the user by
+    name and offers two clear paths:
+      1. Start a new cupping session → cupping.html
+      2. View their session history  → history.html
+
+  PERSONALISATION:
+    User name and recent session data are currently hardcoded
+    as MOCK_USER and MOCK_RECENT_SESSIONS at the top of the
+    script block. Replace these with real API calls once the
+    backend is wired up. See loadUser() and loadRecentSessions().
+
+  PAGE SECTIONS:
+    NAV           Consistent logged-in nav (same as cupping/history)
+    GREETING      Welcome back message personalised with user name,
+                  time-of-day aware (morning/afternoon/evening)
+    ACTION CARDS  Two large tap targets: New Session and History
+    RECENT        Last 3 sessions as a compact summary list,
+                  linking to history.html for the full view
+    FOOTER        Minimal — links to account settings and sign out
+
+  FUTURE / TODO:
+    - Replace MOCK_USER with real auth session (name, email).
+    - Replace MOCK_RECENT_SESSIONS with API fetch.
+    - Add a "Continue draft" card if a session was started but
+      not saved (once localStorage draft saving is implemented
+      in cupping.html).
+    - Account settings page (currently # placeholder).
+    - Sign out flow.
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#faf6ee" />
+  <title>Dashboard — CupIT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    /* ── DESIGN TOKENS — shared across all CupIT pages ── */
+    :root {
+      --bg:      #faf6ee;
+      --paper:   #fff9f0;
+      --dark:    #1c0f05;
+      --brown:   #5c3317;
+      --mid:     #9b6b47;
+      --light:   #c9a882;
+      --accent:  #b85c2b;
+      --steam:   #e8ddd0;
+      --divider: rgba(92,51,23,0.1);
+      --green:   #4a6741;
+      --r:       16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      font-size: 15px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Grain texture — consistent across all CupIT pages */
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV — logged-in variant ── */
+    .top-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(250,246,238,0.97);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--divider);
+      padding: 13px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem; font-weight: 600;
+      color: var(--brown); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 20px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--brown); }
+    .nav-link.active { color: var(--brown); }
+
+    /* ── MAIN CONTENT ── */
+    .page {
+      flex: 1;
+      max-width: 600px; width: 100%;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    /* ── GREETING ── */
+    .greeting {
+      margin-bottom: 36px;
+      animation: fadeUp 0.5s ease both;
+    }
+    .greeting-eyebrow {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--light); margin-bottom: 10px; display: block;
+    }
+    .greeting-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-weight: 400; color: var(--brown);
+      line-height: 1.2; margin-bottom: 8px;
+    }
+    .greeting-title em { font-style: italic; }
+    .greeting-sub {
+      font-size: 0.9rem; color: var(--mid);
+      font-weight: 300; line-height: 1.6;
+    }
+
+    /* ── ACTION CARDS ── */
+    /* Two large tap targets side by side on desktop, stacked on mobile */
+    .action-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 36px;
+      animation: fadeUp 0.5s ease both; animation-delay: 0.1s;
+    }
+    .action-card {
+      display: flex; flex-direction: column;
+      padding: 24px 20px;
+      background: var(--paper);
+      border: 1.5px solid var(--divider);
+      border-radius: 20px;
+      text-decoration: none;
+      transition: all 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .action-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(92,51,23,0.1);
+    }
+    /* Primary action card gets a warm tinted background */
+    .action-card.primary {
+      background: var(--dark);
+      border-color: var(--dark);
+    }
+    .action-card.primary:hover {
+      border-color: var(--accent);
+      background: #2a1508;
+    }
+    .action-card-icon {
+      font-size: 1.8rem; margin-bottom: 14px; display: block;
+    }
+    .action-card-label {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem; font-weight: 600;
+      color: var(--brown); margin-bottom: 6px; line-height: 1.2;
+    }
+    .action-card.primary .action-card-label { color: var(--cream); }
+    .action-card-desc {
+      font-size: 0.78rem; color: var(--mid);
+      line-height: 1.5; flex: 1;
+    }
+    .action-card.primary .action-card-desc { color: rgba(245,233,208,0.5); }
+    .action-card-arrow {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--light); margin-top: 18px;
+      transition: color 0.2s, letter-spacing 0.2s;
+    }
+    .action-card:hover .action-card-arrow {
+      color: var(--accent); letter-spacing: 0.16em;
+    }
+    .action-card.primary .action-card-arrow { color: rgba(245,233,208,0.4); }
+    .action-card.primary:hover .action-card-arrow { color: var(--light); }
+
+    /* ── RECENT SESSIONS ── */
+    .recent-section {
+      animation: fadeUp 0.5s ease both; animation-delay: 0.2s;
+    }
+    .recent-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .recent-title {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid);
+    }
+    .recent-view-all {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--light); text-decoration: none; transition: color 0.2s;
+    }
+    .recent-view-all:hover { color: var(--accent); }
+
+    /* Individual recent session row */
+    .recent-list { display: flex; flex-direction: column; gap: 8px; }
+    .recent-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px;
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: var(--r);
+      text-decoration: none;
+      transition: all 0.18s;
+      cursor: pointer;
+    }
+    .recent-item:hover {
+      border-color: var(--accent);
+      background: rgba(184,92,43,0.03);
+    }
+    .recent-score {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'DM Mono', monospace; font-size: 0.7rem; font-weight: bold;
+    }
+    .recent-score.high { background: rgba(74,103,65,0.12); color: var(--green); }
+    .recent-score.mid  { background: rgba(184,92,43,0.1);  color: var(--accent); }
+    .recent-score.low  { background: rgba(92,51,23,0.07);  color: var(--mid); }
+    .recent-score.none { background: var(--steam); color: var(--light); font-size: 0.6rem; }
+    .recent-info { flex: 1; min-width: 0; }
+    .recent-name {
+      font-weight: 500; color: var(--brown);
+      font-size: 0.88rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .recent-meta {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--light); margin-top: 3px;
+    }
+    .recent-flavours {
+      display: flex; gap: 5px; flex-shrink: 0;
+    }
+    .recent-flavour-chip {
+      font-family: 'DM Mono', monospace; font-size: 0.52rem;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 3px 7px; border-radius: 20px;
+      background: rgba(184,92,43,0.07);
+      border: 1px solid rgba(184,92,43,0.15);
+      color: var(--accent); white-space: nowrap;
+    }
+
+    /* Empty state if no recent sessions */
+    .recent-empty {
+      text-align: center; padding: 28px 20px;
+      background: var(--paper); border: 1px solid var(--divider);
+      border-radius: var(--r);
+    }
+    .recent-empty p {
+      font-size: 0.88rem; color: var(--mid); line-height: 1.6;
+    }
+    .recent-empty a {
+      color: var(--accent); text-decoration: none; font-weight: 500;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--divider);
+      padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 10px;
+    }
+    .footer-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 0.9rem; color: var(--light); text-decoration: none;
+    }
+    .footer-logo em { font-style: italic; }
+    .footer-links {
+      display: flex; gap: 20px; list-style: none;
+    }
+    .footer-links a {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(92,51,23,0.3); text-decoration: none; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--mid); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 440px) {
+      .action-cards { grid-template-columns: 1fr; }
+      .recent-flavours { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav class="top-nav">
+  <a href="dashboard.html" class="nav-logo">Cup<em>IT</em></a>
+  <div class="nav-links">
+    <a href="history.html" class="nav-link">My sessions</a>
+    <a href="cupping.html" class="nav-link">New session</a>
+    <a href="#" class="nav-link">Account</a>
+  </div>
+</nav>
+
+
+<!-- ── MAIN ── -->
+<main class="page">
+
+  <!-- Greeting — personalised with name and time of day -->
+  <div class="greeting">
+    <span class="greeting-eyebrow" id="greeting-eyebrow">Good morning</span>
+    <h1 class="greeting-title">Welcome back, <em id="user-name">Richard</em>.</h1>
+    <p class="greeting-sub">What would you like to do today?</p>
+  </div>
+
+  <!-- Two primary action cards -->
+  <div class="action-cards">
+    <a href="cupping.html" class="action-card primary">
+      <span class="action-card-icon">☕</span>
+      <span class="action-card-label">New cupping session</span>
+      <span class="action-card-desc">Set up a session, add your coffees and start tasting.</span>
+      <span class="action-card-arrow">Start →</span>
+    </a>
+    <a href="history.html" class="action-card">
+      <span class="action-card-icon">📓</span>
+      <span class="action-card-label">Cupping history</span>
+      <span class="action-card-desc">Browse, search and filter all your past sessions.</span>
+      <span class="action-card-arrow">View all →</span>
+    </a>
+  </div>
+
+  <!-- Recent sessions — last 5 -->
+  <div class="recent-section">
+    <div class="recent-header">
+      <span class="recent-title">Recent sessions</span>
+      <a href="history.html" class="recent-view-all">View all →</a>
+    </div>
+    <div class="recent-list" id="recent-list"></div>
+  </div>
+
+</main>
+
+
+<!-- ── FOOTER ── -->
+<footer>
+  <a href="dashboard.html" class="footer-logo">Cup<em>IT</em></a>
+  <ul class="footer-links">
+    <li><a href="#">Account settings</a></li>
+    <li><a href="index.html">Sign out</a></li>
+  </ul>
+</footer>
+
+
+<script>
+  // ══════════════════════════════════════════════════════════
+  //  MOCK DATA
+  //  Replace loadUser() and loadRecentSessions() with real
+  //  API calls once auth and session storage are wired up.
+  // ══════════════════════════════════════════════════════════
+
+  // User object — replace with real auth session data
+  const MOCK_USER = {
+    name: 'Richard',
+  };
+
+  // Recent sessions — replace with API fetch of latest 5 sessions.
+  // Shape must match the session objects in history.html's MOCK_SESSIONS.
+  const MOCK_RECENT = [
+    {
+      id: 1,
+      name: 'Saturday morning — Kenyan naturals',
+      date: '2025-03-15',
+      coffees: [
+        { name: 'Kamwangi AB',  data: { scores: { Acidity:8.5, Body:7.5, Sweetness:8, Finish:8, Balance:8 }, flavours: ['Blackberry','Lemon'] } },
+        { name: 'Gakuyuini AA', data: { scores: { Acidity:9,   Body:7,   Sweetness:7.5, Finish:8.5, Balance:8.5 }, flavours: ['Raspberry','Black Tea'] } },
+      ]
+    },
+    {
+      id: 2,
+      name: 'Ethiopian batch comparison — Q3',
+      date: '2025-03-08',
+      coffees: [
+        { name: 'Yirgacheffe Lot 12', data: { scores: { Acidity:7, Body:8, Sweetness:9, Finish:8.5, Balance:8 }, flavours: ['Blueberry','Caramel'] } },
+        { name: 'Yirgacheffe Lot 13', data: { scores: { Acidity:7.5, Body:7.5, Sweetness:8.5, Finish:8, Balance:7.5 }, flavours: ['Passion Fruit'] } },
+        { name: 'Yirgacheffe Washed', data: { scores: { Acidity:8.5, Body:6.5, Sweetness:7.5, Finish:8, Balance:8 }, flavours: ['Jasmine','Lemon'] } },
+      ]
+    },
+    {
+      id: 3,
+      name: 'Quick Tuesday cup',
+      date: '2025-03-04',
+      coffees: [
+        { name: 'Colombia Huila Anaerobic', data: { scores: { Acidity:7, Body:8.5, Sweetness:9, Finish:7.5, Balance:7.5 }, flavours: ['Caramel','Dark Chocolate'] } },
+      ]
+    },
+    {
+      id: 4,
+      name: 'Gesha comparison',
+      date: '2025-02-22',
+      coffees: [
+        { name: 'Panama Gesha Natural',  data: { scores: { Acidity:8, Body:7, Sweetness:9.5, Finish:9.5, Balance:9 }, flavours: ['Jasmine','Peach'] } },
+        { name: 'Ethiopia Gesha Washed', data: { scores: { Acidity:8.5, Body:6.5, Sweetness:8.5, Finish:9, Balance:8.5 }, flavours: ['Orange Blossom','Lemon'] } },
+      ]
+    },
+    {
+      id: 5,
+      name: 'Monday roastery QC — Batch 24-12',
+      date: '2025-02-17',
+      coffees: [
+        { name: 'Guatemala Huehuetenango', data: { scores: { Acidity:6.5, Body:8, Sweetness:7, Finish:6.5, Balance:7 }, flavours: ['Brown Sugar','Almond'] } },
+      ]
+    },
+  ];
+
+
+  // ══════════════════════════════════════════════════════════
+  //  INIT
+  // ══════════════════════════════════════════════════════════
+  function init() {
+    setGreeting();
+    loadUser();
+    renderRecentSessions();
+  }
+
+  // Sets the time-of-day greeting label (morning/afternoon/evening)
+  function setGreeting() {
+    const hour = new Date().getHours();
+    const label = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    document.getElementById('greeting-eyebrow').textContent = label;
+  }
+
+  // Populates the user name in the greeting.
+  // Replace with real auth session lookup.
+  function loadUser() {
+    document.getElementById('user-name').textContent = MOCK_USER.name;
+  }
+
+  // Renders the 3 most recent sessions as compact rows.
+  function renderRecentSessions() {
+    const list = document.getElementById('recent-list');
+
+    if (!MOCK_RECENT.length) {
+      list.innerHTML = `
+        <div class="recent-empty">
+          <p>No sessions yet. <a href="cupping.html">Start your first cupping →</a></p>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = MOCK_RECENT.map(s => {
+      const avg = sessionAvgScore(s);
+      const scoreClass = avg === null ? 'none' : avg >= 8 ? 'high' : avg >= 7 ? 'mid' : 'low';
+      const scoreText  = avg !== null ? avg.toFixed(1) : '—';
+
+      // Show top 2 flavours across all coffees in the session
+      const allFlavours = [...new Set(s.coffees.flatMap(c => c.data.flavours || []))];
+      const topFlavours = allFlavours.slice(0, 2);
+
+      const coffeeCount = s.coffees.length;
+
+      return `
+        <a href="history.html" class="recent-item">
+          <div class="recent-score ${scoreClass}">${scoreText}</div>
+          <div class="recent-info">
+            <div class="recent-name">${escHtml(s.name)}</div>
+            <div class="recent-meta">
+              ${formatDate(s.date)} · ${coffeeCount} coffee${coffeeCount > 1 ? 's' : ''}
+            </div>
+          </div>
+          <div class="recent-flavours">
+            ${topFlavours.map(f => `<span class="recent-flavour-chip">${escHtml(f)}</span>`).join('')}
+          </div>
+        </a>`;
+    }).join('');
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  UTILITIES — same as history.html
+  // ══════════════════════════════════════════════════════════
+
+  // Average score across all coffees in a session
+  function sessionAvgScore(session) {
+    const allScores = session.coffees.flatMap(c => Object.values(c.data.scores || {}));
+    if (!allScores.length) return null;
+    return allScores.reduce((a, b) => a + b, 0) / allScores.length;
+  }
+
+  // Formats ISO date string to readable display
+  function formatDate(iso) {
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-IE', {
+      day: 'numeric', month: 'short', year: 'numeric'
+    });
+  }
+
+  // Prevents XSS when inserting user data into innerHTML
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>

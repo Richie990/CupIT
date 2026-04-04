@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Session History  (history.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    A logged-in user's full cupping history in one place.
+    Designed for density and scannability — especially useful
+    for quality control (e.g. tracking a coffee across batches).
+
+  DATA:
+    Currently uses MOCK_SESSIONS[] defined in the script block.
+    When the backend is ready, replace loadSessions() with a real
+    API call and populate sessions[] from the response.
+    Session objects must match the shape defined in MOCK_SESSIONS.
+
+  PAGE LAYOUT:
+    TOP NAV       Sticky nav with logo and account link
+    HEADER        Page title, session count, "New session" button
+    FILTER BAR    Search + filter controls (name, date, score, roaster)
+    SESSION TABLE Dense table showing one row per session.
+                  Columns: Date, Session Name, Coffees, Avg Score,
+                  Top Flavours, Roaster. Sortable by column header.
+    DRAWER        Slide-in panel from the right showing full session
+                  detail when a row is tapped. Closes on overlay click
+                  or the × button.
+
+  KEY JAVASCRIPT:
+    MOCK_SESSIONS[]   Sample data. Replace with API response.
+    loadSessions()    Populates sessions[] — swap for real fetch here.
+    renderTable()     Filters, sorts and renders the table rows.
+    applyFilters()    Reads all filter inputs and returns filtered array.
+    sortSessions()    Sorts the filtered array by the active column.
+    openDrawer(id)    Finds session by id, builds and slides in the drawer.
+    closeDrawer()     Hides the drawer and overlay.
+    formatDate()      Formats ISO date strings for display.
+    avgScore()        Computes average from a scores object.
+
+  FILTER BEHAVIOUR:
+    All filters are AND'd together — a session must pass every
+    active filter to appear. Filters debounce 200ms on text input.
+
+  SORTING:
+    Click any column header to sort by that column.
+    Click again to reverse. Active sort column is highlighted.
+
+  FUTURE / TODO:
+    - Replace MOCK_SESSIONS with real API fetch in loadSessions().
+    - Add export to CSV / PDF button.
+    - Add a "Compare sessions" mode — select two rows, open a
+      side-by-side comparison drawer.
+    - Pagination or infinite scroll for large history sets.
+    - "Starred" sessions for quick access to key reference batches.
+  ═══════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#faf6ee" />
+  <title>Session History — CupIT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    /* ── DESIGN TOKENS ── */
+    :root {
+      --bg:      #faf6ee;
+      --paper:   #fff9f0;
+      --dark:    #1c0f05;
+      --brown:   #5c3317;
+      --mid:     #9b6b47;
+      --light:   #c9a882;
+      --accent:  #b85c2b;
+      --steam:   #e8ddd0;
+      --divider: rgba(92,51,23,0.1);
+      --green:   #4a6741;
+      --r:       10px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* Grain texture overlay — consistent across all CupIT pages */
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV ── */
+    .top-nav {
+      position: sticky; top: 0; z-index: 200;
+      background: rgba(250,246,238,0.97);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--divider);
+      padding: 13px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem; font-weight: 600;
+      color: var(--brown); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 20px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--brown); }
+    .nav-link.active { color: var(--brown); font-weight: 500; }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      padding: 28px 24px 20px;
+      border-bottom: 1px solid var(--divider);
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap;
+    }
+    .page-header-left {}
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem; font-weight: 600;
+      color: var(--brown); line-height: 1.2; margin-bottom: 4px;
+    }
+    .page-title em { font-style: italic; }
+    .page-meta {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--light);
+    }
+    .btn-new-session {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--brown); color: var(--paper);
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 10px 18px; border-radius: 50px; border: none;
+      cursor: pointer; transition: background 0.2s; text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn-new-session:hover { background: var(--accent); }
+
+    /* ── FILTER BAR ── */
+    .filter-bar {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--divider);
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: var(--paper);
+    }
+    .filter-input {
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1.5px solid var(--divider);
+      border-radius: var(--r);
+      font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+      color: var(--dark); outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .filter-input:focus { border-color: var(--accent); }
+    .filter-input::placeholder { color: var(--light); font-style: italic; }
+    .filter-search { flex: 1; min-width: 160px; }
+    .filter-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239b6b47' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+      padding-right: 28px; cursor: pointer; min-width: 110px;
+    }
+    .filter-score-wrap {
+      display: flex; align-items: center; gap: 6px;
+      white-space: nowrap;
+    }
+    .filter-score-label {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid);
+    }
+    .filter-score-input {
+      width: 52px; text-align: center; padding: 8px 6px;
+    }
+    .filter-sep { color: var(--light); font-size: 0.8rem; }
+    .btn-clear-filters {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--light); background: none; border: none;
+      cursor: pointer; transition: color 0.2s; padding: 8px 4px;
+      white-space: nowrap;
+    }
+    .btn-clear-filters:hover { color: var(--accent); }
+
+    /* ── TABLE ── */
+    .table-wrap {
+      overflow-x: auto;
+      padding: 0 0 80px;
+    }
+
+    /* Empty state shown when no results match */
+    .empty-state {
+      text-align: center; padding: 60px 24px; color: var(--mid);
+      display: none;
+    }
+    .empty-state.show { display: block; }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 12px; display: block; opacity: 0.4; }
+    .empty-text { font-size: 0.9rem; line-height: 1.6; }
+
+    table {
+      width: 100%; border-collapse: collapse;
+      min-width: 640px;
+    }
+    thead {
+      position: sticky; top: 48px; z-index: 10;
+      background: var(--paper);
+      border-bottom: 2px solid var(--divider);
+    }
+    th {
+      padding: 11px 16px;
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); font-weight: 400;
+      text-align: left; cursor: pointer; user-select: none;
+      white-space: nowrap; transition: color 0.2s;
+    }
+    th:hover { color: var(--brown); }
+    th.sorted { color: var(--accent); }
+    th .sort-arrow { margin-left: 4px; opacity: 0.5; font-size: 0.65rem; }
+    th.sorted .sort-arrow { opacity: 1; }
+
+    tbody tr {
+      border-bottom: 1px solid var(--divider);
+      cursor: pointer; transition: background 0.15s;
+    }
+    tbody tr:hover { background: rgba(92,51,23,0.03); }
+    tbody tr.selected { background: rgba(184,92,43,0.06); }
+
+    td {
+      padding: 13px 16px;
+      vertical-align: middle;
+      font-size: 0.85rem; color: var(--dark);
+    }
+
+    /* Date column */
+    .td-date {
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      color: var(--mid); white-space: nowrap;
+    }
+
+    /* Session name — primary identifier */
+    .td-name { font-weight: 500; color: var(--brown); }
+    .td-name-sub {
+      font-size: 0.72rem; color: var(--mid); margin-top: 2px;
+      font-weight: 400;
+    }
+
+    /* Coffee count badge */
+    .td-coffees {
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      color: var(--mid);
+    }
+
+    /* Score badge — colour coded */
+    .score-pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; border-radius: 50%;
+      font-family: 'DM Mono', monospace; font-size: 0.72rem;
+      font-weight: bold; flex-shrink: 0;
+    }
+    .score-pill.high   { background: rgba(74,103,65,0.15);  color: var(--green); }
+    .score-pill.mid    { background: rgba(184,92,43,0.12);  color: var(--accent); }
+    .score-pill.low    { background: rgba(92,51,23,0.08);   color: var(--mid); }
+    .score-pill.none   { background: var(--steam);          color: var(--light); font-size: 0.6rem; }
+
+    /* Flavour tags — compact */
+    .td-flavours { max-width: 200px; }
+    .flavour-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .flavour-chip {
+      font-family: 'DM Mono', monospace; font-size: 0.55rem;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 20px;
+      background: rgba(184,92,43,0.07);
+      border: 1px solid rgba(184,92,43,0.18);
+      color: var(--accent); white-space: nowrap;
+    }
+    .flavour-more {
+      font-family: 'DM Mono', monospace; font-size: 0.55rem;
+      color: var(--light); white-space: nowrap; padding-top: 2px;
+    }
+
+    /* ── DRAWER ── */
+    /* Dark overlay behind drawer */
+    .drawer-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(28,15,5,0.5);
+      backdrop-filter: blur(2px);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .drawer-overlay.open { opacity: 1; pointer-events: all; }
+
+    /* Drawer panel slides in from the right */
+    .drawer {
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 301;
+      width: 100%; max-width: 480px;
+      background: var(--paper);
+      box-shadow: -8px 0 40px rgba(28,15,5,0.2);
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow-y: auto;
+      display: flex; flex-direction: column;
+    }
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-header {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--dark);
+      padding: 18px 20px;
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px;
+    }
+    .drawer-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem; font-weight: 600;
+      color: var(--cream); line-height: 1.25;
+    }
+    .drawer-meta {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--light); margin-top: 4px;
+    }
+    .drawer-close {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(255,255,255,0.1); border: none;
+      color: var(--light); font-size: 1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: background 0.2s; margin-top: 2px;
+    }
+    .drawer-close:hover { background: rgba(255,255,255,0.2); }
+
+    .drawer-body { padding: 20px; flex: 1; }
+
+    /* Individual coffee card inside the drawer */
+    .drawer-coffee {
+      background: var(--bg);
+      border: 1px solid var(--divider);
+      border-radius: 14px; padding: 16px;
+      margin-bottom: 12px;
+    }
+    .drawer-coffee-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .drawer-coffee-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem; font-weight: 600; color: var(--brown);
+    }
+    .drawer-score-badge {
+      background: linear-gradient(135deg, var(--accent), #c8682f);
+      color: white; font-family: 'DM Mono', monospace;
+      font-size: 0.8rem; width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .drawer-row {
+      display: flex; gap: 10px; margin-bottom: 8px; font-size: 0.82rem;
+    }
+    .drawer-key {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--light); width: 72px; flex-shrink: 0; padding-top: 2px;
+    }
+    .drawer-val { color: var(--brown); }
+    .drawer-val.italic { font-style: italic; color: var(--mid); }
+
+    /* Score bars in drawer */
+    .drawer-score-bars { margin-top: 10px; }
+    .score-bar-row {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .score-bar-label {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mid); width: 68px; flex-shrink: 0;
+    }
+    .score-bar-track {
+      flex: 1; height: 4px; background: rgba(92,51,23,0.1);
+      border-radius: 2px; overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%; background: var(--accent); border-radius: 2px;
+    }
+    .score-bar-val {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      color: var(--accent); width: 24px; text-align: right; flex-shrink: 0;
+    }
+
+    .drawer-flavour-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .drawer-flavour-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 20px;
+      background: rgba(184,92,43,0.08);
+      border: 1px solid rgba(184,92,43,0.2); color: var(--accent);
+    }
+
+    /* Section divider inside drawer */
+    .drawer-divider {
+      height: 1px; background: var(--divider); margin: 16px 0;
+    }
+    .drawer-section-label {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--light); margin-bottom: 12px; display: block;
+    }
+
+    /* Drawer footer actions */
+    .drawer-footer {
+      padding: 16px 20px 28px;
+      border-top: 1px solid var(--divider);
+      display: flex; gap: 10px;
+    }
+    .drawer-btn {
+      flex: 1; padding: 12px;
+      border-radius: var(--r); border: none; cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    .drawer-btn-primary { background: var(--brown); color: var(--paper); }
+    .drawer-btn-primary:hover { background: var(--accent); }
+    .drawer-btn-ghost { background: transparent; border: 1.5px solid var(--divider); color: var(--mid); }
+    .drawer-btn-ghost:hover { border-color: var(--brown); color: var(--brown); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    tbody tr { animation: fadeUp 0.2s ease both; }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav class="top-nav">
+  <a href="dashboard.html" class="nav-logo">Cup<em>IT</em></a>
+  <div class="nav-links">
+    <a href="cupping.html" class="nav-link">New session</a>
+    <a href="history.html" class="nav-link active">History</a>
+    <a href="#" class="nav-link">Account</a>
+  </div>
+</nav>
+
+
+<!-- ── PAGE HEADER ── -->
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">Cupping <em>history</em></h1>
+    <p class="page-meta" id="session-count">Loading sessions...</p>
+  </div>
+  <a href="cupping.html" class="btn-new-session">+ New session</a>
+</div>
+
+
+<!-- ── FILTER BAR ── -->
+<div class="filter-bar">
+  <!-- Text search across session name and coffee names -->
+  <input type="text" class="filter-input filter-search" id="filter-search"
+    placeholder="Search sessions or coffees..." oninput="debouncedRender()" />
+
+  <!-- Filter by roaster -->
+  <select class="filter-input filter-select" id="filter-roaster" onchange="renderTable()">
+    <option value="">All roasters</option>
+  </select>
+
+  <!-- Filter by date range -->
+  <input type="date" class="filter-input" id="filter-date-from"
+    title="From date" onchange="renderTable()" />
+  <span class="filter-sep">—</span>
+  <input type="date" class="filter-input" id="filter-date-to"
+    title="To date" onchange="renderTable()" />
+
+  <!-- Filter by score range -->
+  <div class="filter-score-wrap">
+    <span class="filter-score-label">Score</span>
+    <input type="number" class="filter-input filter-score-input" id="filter-score-min"
+      min="1" max="10" step="0.5" placeholder="min" oninput="debouncedRender()" />
+    <span class="filter-sep">–</span>
+    <input type="number" class="filter-input filter-score-input" id="filter-score-max"
+      min="1" max="10" step="0.5" placeholder="max" oninput="debouncedRender()" />
+  </div>
+
+  <button class="btn-clear-filters" onclick="clearFilters()">Clear filters</button>
+</div>
+
+
+<!-- ── SESSION TABLE ── -->
+<div class="table-wrap">
+  <div class="empty-state" id="empty-state">
+    <span class="empty-icon">🫘</span>
+    <p class="empty-text">No sessions match your filters.<br>Try adjusting the search or date range.</p>
+  </div>
+
+  <table id="session-table">
+    <thead>
+      <tr>
+        <!-- Each th has a data-col attribute used for sorting -->
+        <th data-col="date" onclick="setSort('date')" class="sorted">
+          Date <span class="sort-arrow" id="arrow-date">↓</span>
+        </th>
+        <th data-col="name" onclick="setSort('name')">
+          Session <span class="sort-arrow" id="arrow-name"></span>
+        </th>
+        <th data-col="coffees" onclick="setSort('coffees')">
+          Coffees <span class="sort-arrow" id="arrow-coffees"></span>
+        </th>
+        <th data-col="score" onclick="setSort('score')">
+          Avg score <span class="sort-arrow" id="arrow-score"></span>
+        </th>
+        <th>Top flavours</th>
+        <th data-col="roaster" onclick="setSort('roaster')">
+          Roaster <span class="sort-arrow" id="arrow-roaster"></span>
+        </th>
+      </tr>
+    </thead>
+    <tbody id="table-body"></tbody>
+  </table>
+</div>
+
+
+<!-- ── DRAWER OVERLAY ── -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+
+<!-- ── DETAIL DRAWER ── -->
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div>
+      <p class="drawer-title" id="drawer-title"></p>
+      <p class="drawer-meta" id="drawer-meta"></p>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+  <div class="drawer-footer">
+    <button class="drawer-btn drawer-btn-ghost" onclick="closeDrawer()">Close</button>
+    <button class="drawer-btn drawer-btn-primary" onclick="reopenSession()">Re-cup this →</button>
+  </div>
+</div>
+
+
+<script>
+  // ══════════════════════════════════════════════════════════
+  //  MOCK DATA
+  //  Replace loadSessions() with a real API fetch when the
+  //  backend is ready. Session shape must match this structure.
+  //  Each coffee in the coffees array matches the shape written
+  //  by cupping.html — { name, data: { scores, flavours, ... } }
+  // ══════════════════════════════════════════════════════════
+  const MOCK_SESSIONS = [
+    {
+      id: 1,
+      name: 'Saturday morning — Kenyan naturals',
+      date: '2025-03-15',
+      coffees: [
+        {
+          name: 'Kamwangi AB',
+          data: {
+            origin: 'Kenya, Kirinyaga',
+            roaster: 'Workshop Coffee',
+            process: 'Washed',
+            roast: 'Light',
+            scores: { Acidity: 8.5, Body: 7.5, Sweetness: 8, Finish: 8, Balance: 8 },
+            flavours: ['Blackberry','Lemon','Brown Sugar'],
+            notes: 'Bright and clean. Beautiful citric acidity that softens as it cools. Long finish.',
+          }
+        },
+        {
+          name: 'Gakuyuini AA',
+          data: {
+            origin: 'Kenya, Nyeri',
+            roaster: 'Workshop Coffee',
+            process: 'Washed',
+            roast: 'Light',
+            scores: { Acidity: 9, Body: 7, Sweetness: 7.5, Finish: 8.5, Balance: 8.5 },
+            flavours: ['Raspberry','Citric','Black Tea'],
+            notes: 'More delicate than the Kamwangi. Floral and complex.',
+          }
+        },
+      ]
+    },
+    {
+      id: 2,
+      name: 'Ethiopian batch comparison — Q3',
+      date: '2025-03-08',
+      coffees: [
+        {
+          name: 'Yirgacheffe Natural Lot 12',
+          data: {
+            origin: 'Ethiopia, Yirgacheffe',
+            roaster: 'Has Bean',
+            process: 'Natural',
+            roast: 'Light',
+            scores: { Acidity: 7, Body: 8, Sweetness: 9, Finish: 8.5, Balance: 8 },
+            flavours: ['Blueberry','Mango','Caramel'],
+            notes: 'Classic natural processing character. Heavy and sweet.',
+          }
+        },
+        {
+          name: 'Yirgacheffe Natural Lot 13',
+          data: {
+            origin: 'Ethiopia, Yirgacheffe',
+            roaster: 'Has Bean',
+            process: 'Natural',
+            roast: 'Light',
+            scores: { Acidity: 7.5, Body: 7.5, Sweetness: 8.5, Finish: 8, Balance: 7.5 },
+            flavours: ['Blueberry','Passion Fruit','Honey'],
+            notes: 'Slightly brighter than Lot 12. Less body but more clarity.',
+          }
+        },
+        {
+          name: 'Yirgacheffe Washed Lot 4',
+          data: {
+            origin: 'Ethiopia, Yirgacheffe',
+            roaster: 'Has Bean',
+            process: 'Washed',
+            roast: 'Light',
+            scores: { Acidity: 8.5, Body: 6.5, Sweetness: 7.5, Finish: 8, Balance: 8 },
+            flavours: ['Jasmine','Lemon','Elderflower'],
+            notes: 'Completely different profile. Delicate, tea-like.',
+          }
+        },
+      ]
+    },
+    {
+      id: 3,
+      name: 'Quick Tuesday cup',
+      date: '2025-03-04',
+      coffees: [
+        {
+          name: 'Colombia Huila Anaerobic',
+          data: {
+            origin: 'Colombia, Huila',
+            roaster: 'Squaremile',
+            process: 'Anaerobic',
+            roast: 'Medium-Light',
+            scores: { Acidity: 7, Body: 8.5, Sweetness: 9, Finish: 7.5, Balance: 7.5 },
+            flavours: ['Caramel','Dark Chocolate','Winey'],
+            notes: 'Funky in a good way. Rich and boozy when hot, smooths out when cool.',
+          }
+        },
+      ]
+    },
+    {
+      id: 4,
+      name: 'Gesha comparison',
+      date: '2025-02-22',
+      coffees: [
+        {
+          name: 'Panama Gesha Natural',
+          data: {
+            origin: 'Panama, Boquete',
+            roaster: 'Onyx Coffee',
+            process: 'Natural',
+            roast: 'Light',
+            scores: { Acidity: 8, Body: 7, Sweetness: 9.5, Finish: 9.5, Balance: 9 },
+            flavours: ['Jasmine','Peach','Elderflower','Honey'],
+            notes: 'Genuinely exceptional. Floral and perfumed like nothing else.',
+          }
+        },
+        {
+          name: 'Ethiopia Gesha Washed',
+          data: {
+            origin: 'Ethiopia, Guji',
+            roaster: 'Onyx Coffee',
+            process: 'Washed',
+            roast: 'Light',
+            scores: { Acidity: 8.5, Body: 6.5, Sweetness: 8.5, Finish: 9, Balance: 8.5 },
+            flavours: ['Jasmine','Lemon','Orange Blossom'],
+            notes: 'More citric and sharp than the Panama. Lighter body.',
+          }
+        },
+      ]
+    },
+    {
+      id: 5,
+      name: 'Monday roastery QC — Batch 24-11',
+      date: '2025-02-10',
+      coffees: [
+        {
+          name: 'Guatemala Huehuetenango',
+          data: {
+            origin: 'Guatemala, Huehuetenango',
+            roaster: 'Internal',
+            process: 'Washed',
+            roast: 'Medium',
+            scores: { Acidity: 7, Body: 8, Sweetness: 7.5, Finish: 7, Balance: 7.5 },
+            flavours: ['Brown Sugar','Almond','Toast'],
+            notes: 'Solid. Reliable. Good base espresso profile.',
+          }
+        },
+      ]
+    },
+    {
+      id: 6,
+      name: 'Monday roastery QC — Batch 24-12',
+      date: '2025-02-17',
+      coffees: [
+        {
+          name: 'Guatemala Huehuetenango',
+          data: {
+            origin: 'Guatemala, Huehuetenango',
+            roaster: 'Internal',
+            process: 'Washed',
+            roast: 'Medium',
+            scores: { Acidity: 6.5, Body: 8, Sweetness: 7, Finish: 6.5, Balance: 7 },
+            flavours: ['Brown Sugar','Almond','Bitter'],
+            notes: 'Slightly darker than 24-11. Acidity has dropped. Check roast curve.',
+          }
+        },
+      ]
+    },
+  ];
+
+  // ══════════════════════════════════════════════════════════
+  //  STATE
+  // ══════════════════════════════════════════════════════════
+  let sessions     = [];      // full session array from loadSessions()
+  let sortCol      = 'date';  // currently sorted column
+  let sortAsc      = false;   // false = newest first (descending)
+  let activeDrawerId = null;  // id of the session currently in the drawer
+  let debounceTimer  = null;  // for text input debounce
+
+  // ══════════════════════════════════════════════════════════
+  //  INITIALISE
+  // ══════════════════════════════════════════════════════════
+  function init() {
+    loadSessions();
+    populateRoasterFilter();
+    renderTable();
+  }
+
+  // Replace the body of this function with a real API call.
+  // e.g. const res = await fetch('/api/sessions'); sessions = await res.json();
+  function loadSessions() {
+    sessions = MOCK_SESSIONS;
+  }
+
+  // Extracts all unique roaster values from session data
+  // and populates the roaster filter dropdown.
+  function populateRoasterFilter() {
+    const roasters = new Set();
+    sessions.forEach(s => {
+      s.coffees.forEach(c => {
+        if (c.data.roaster) roasters.add(c.data.roaster);
+      });
+    });
+    const sel = document.getElementById('filter-roaster');
+    [...roasters].sort().forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r; opt.textContent = r;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  FILTERING
+  //  All filters are AND'd — a session must pass all active
+  //  filters to appear in the table.
+  // ══════════════════════════════════════════════════════════
+  function applyFilters() {
+    const search   = document.getElementById('filter-search').value.trim().toLowerCase();
+    const roaster  = document.getElementById('filter-roaster').value;
+    const dateFrom = document.getElementById('filter-date-from').value;
+    const dateTo   = document.getElementById('filter-date-to').value;
+    const scoreMin = parseFloat(document.getElementById('filter-score-min').value) || null;
+    const scoreMax = parseFloat(document.getElementById('filter-score-max').value) || null;
+
+    return sessions.filter(s => {
+      // Text search: session name or any coffee name
+      if (search) {
+        const nameMatch  = s.name.toLowerCase().includes(search);
+        const coffeeMatch = s.coffees.some(c => c.name.toLowerCase().includes(search));
+        if (!nameMatch && !coffeeMatch) return false;
+      }
+
+      // Roaster filter: any coffee in the session must match
+      if (roaster) {
+        const match = s.coffees.some(c => c.data.roaster === roaster);
+        if (!match) return false;
+      }
+
+      // Date range filter
+      if (dateFrom && s.date < dateFrom) return false;
+      if (dateTo   && s.date > dateTo)   return false;
+
+      // Score range filter: session's average score must fall within range
+      const avg = sessionAvgScore(s);
+      if (avg !== null) {
+        if (scoreMin !== null && avg < scoreMin) return false;
+        if (scoreMax !== null && avg > scoreMax) return false;
+      }
+
+      return true;
+    });
+  }
+
+  function clearFilters() {
+    document.getElementById('filter-search').value    = '';
+    document.getElementById('filter-roaster').value  = '';
+    document.getElementById('filter-date-from').value = '';
+    document.getElementById('filter-date-to').value   = '';
+    document.getElementById('filter-score-min').value = '';
+    document.getElementById('filter-score-max').value = '';
+    renderTable();
+  }
+
+  // Debounced version of renderTable for text inputs
+  function debouncedRender() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(renderTable, 200);
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  SORTING
+  // ══════════════════════════════════════════════════════════
+  function setSort(col) {
+    // Toggle direction if same column, otherwise default to descending for date/score
+    if (sortCol === col) {
+      sortAsc = !sortAsc;
+    } else {
+      sortCol = col;
+      sortAsc = (col === 'name' || col === 'roaster'); // alpha cols default asc
+    }
+    updateSortArrows();
+    renderTable();
+  }
+
+  function sortSessions(arr) {
+    return [...arr].sort((a, b) => {
+      let av, bv;
+      switch (sortCol) {
+        case 'date':    av = a.date; bv = b.date; break;
+        case 'name':    av = a.name.toLowerCase(); bv = b.name.toLowerCase(); break;
+        case 'coffees': av = a.coffees.length; bv = b.coffees.length; break;
+        case 'score':   av = sessionAvgScore(a) ?? -1; bv = sessionAvgScore(b) ?? -1; break;
+        case 'roaster':
+          // Sort by first roaster found in the session
+          av = (a.coffees[0]?.data?.roaster || '').toLowerCase();
+          bv = (b.coffees[0]?.data?.roaster || '').toLowerCase();
+          break;
+        default: return 0;
+      }
+      if (av < bv) return sortAsc ? -1 : 1;
+      if (av > bv) return sortAsc ? 1 : -1;
+      return 0;
+    });
+  }
+
+  function updateSortArrows() {
+    const cols = ['date','name','coffees','score','roaster'];
+    cols.forEach(col => {
+      const th    = document.querySelector(`th[data-col="${col}"]`);
+      const arrow = document.getElementById('arrow-' + col);
+      if (!th || !arrow) return;
+      th.classList.toggle('sorted', col === sortCol);
+      arrow.textContent = col === sortCol ? (sortAsc ? '↑' : '↓') : '';
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  RENDER TABLE
+  //  Main render loop — filters, sorts, then builds table rows.
+  // ══════════════════════════════════════════════════════════
+  function renderTable() {
+    const filtered = applyFilters();
+    const sorted   = sortSessions(filtered);
+
+    // Update session count in header
+    document.getElementById('session-count').textContent =
+      `${sorted.length} session${sorted.length !== 1 ? 's' : ''}${filtered.length < sessions.length ? ' (filtered)' : ''}`;
+
+    // Show empty state if no results
+    document.getElementById('empty-state').classList.toggle('show', sorted.length === 0);
+    document.getElementById('session-table').style.display = sorted.length ? 'table' : 'none';
+
+    const tbody = document.getElementById('table-body');
+    tbody.innerHTML = sorted.map((s, i) => {
+      const avg       = sessionAvgScore(s);
+      const scoreClass = avg === null ? 'none' : avg >= 8 ? 'high' : avg >= 7 ? 'mid' : 'low';
+      const scoreText  = avg !== null ? avg.toFixed(1) : '—';
+
+      // Gather all flavours from all coffees in the session
+      const allFlavours = [...new Set(s.coffees.flatMap(c => c.data.flavours || []))];
+      const showFlavours = allFlavours.slice(0, 3);
+      const extraCount   = allFlavours.length - showFlavours.length;
+
+      // Get roasters — deduplicated
+      const roasters = [...new Set(s.coffees.map(c => c.data.roaster).filter(Boolean))];
+
+      return `<tr onclick="openDrawer(${s.id})" style="animation-delay:${i*30}ms"
+               class="${activeDrawerId === s.id ? 'selected' : ''}">
+        <td class="td-date">${formatDate(s.date)}</td>
+        <td>
+          <div class="td-name">${escHtml(s.name)}</div>
+          ${s.coffees.length > 1 ? `<div class="td-name-sub">${s.coffees.map(c => escHtml(c.name)).join(', ')}</div>` : ''}
+        </td>
+        <td class="td-coffees">${s.coffees.length}</td>
+        <td><span class="score-pill ${scoreClass}">${scoreText}</span></td>
+        <td class="td-flavours">
+          <div class="flavour-chips">
+            ${showFlavours.map(f => `<span class="flavour-chip">${escHtml(f)}</span>`).join('')}
+            ${extraCount > 0 ? `<span class="flavour-more">+${extraCount}</span>` : ''}
+          </div>
+        </td>
+        <td style="color:var(--mid);font-size:0.8rem">${roasters.join(', ') || '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  DRAWER
+  //  Slides in from the right to show full session detail.
+  // ══════════════════════════════════════════════════════════
+  function openDrawer(id) {
+    const session = sessions.find(s => s.id === id);
+    if (!session) return;
+
+    activeDrawerId = id;
+
+    // Highlight selected row
+    document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
+    event.currentTarget.classList.add('selected');
+
+    // Populate drawer header
+    document.getElementById('drawer-title').textContent = session.name;
+    document.getElementById('drawer-meta').textContent  =
+      `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''}`;
+
+    // Build drawer body — one card per coffee
+    let html = '';
+    session.coffees.forEach((c, i) => {
+      const d      = c.data;
+      const scores = d.scores || {};
+      const avg    = avgScore(scores);
+
+      html += `<div class="drawer-coffee">
+        <div class="drawer-coffee-header">
+          <span class="drawer-coffee-name">${escHtml(c.name)}</span>
+          ${avg !== null ? `<span class="drawer-score-badge">${avg.toFixed(1)}</span>` : ''}
+        </div>`;
+
+      // Metadata rows
+      if (d.origin)  html += drawerRow('Origin',  d.origin);
+      if (d.roaster) html += drawerRow('Roaster', d.roaster);
+      if (d.process) html += drawerRow('Process', d.process);
+      if (d.roast)   html += drawerRow('Roast',   d.roast);
+      if (d.brew)    html += drawerRow('Method',  d.brew);
+
+      // Score bars
+      if (Object.keys(scores).length) {
+        html += `<div class="drawer-divider"></div>
+          <span class="drawer-section-label">Scores</span>
+          <div class="drawer-score-bars">
+            ${Object.entries(scores).map(([attr, val]) => `
+              <div class="score-bar-row">
+                <span class="score-bar-label">${attr}</span>
+                <div class="score-bar-track">
+                  <div class="score-bar-fill" style="width:${(val/10)*100}%"></div>
+                </div>
+                <span class="score-bar-val">${val}</span>
+              </div>`).join('')}
+          </div>`;
+      }
+
+      // Flavour tags
+      if (d.flavours?.length) {
+        html += `<div class="drawer-divider"></div>
+          <span class="drawer-section-label">Flavour notes</span>
+          <div class="drawer-flavour-tags">
+            ${d.flavours.map(f => `<span class="drawer-flavour-tag">${escHtml(f)}</span>`).join('')}
+          </div>`;
+      }
+
+      // Free-text notes
+      if (d.notes) {
+        html += `<div class="drawer-divider"></div>
+          <span class="drawer-section-label">Tasting notes</span>
+          <p style="font-size:0.85rem;color:var(--mid);font-style:italic;line-height:1.65">${escHtml(d.notes)}</p>`;
+      }
+
+      html += `</div>`;
+    });
+
+    document.getElementById('drawer-body').innerHTML = html;
+
+    // Open drawer and overlay
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('drawer-overlay').classList.add('open');
+  }
+
+  function closeDrawer() {
+    document.getElementById('drawer').classList.remove('open');
+    document.getElementById('drawer-overlay').classList.remove('open');
+    // Deselect row after animation completes
+    setTimeout(() => {
+      document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
+      activeDrawerId = null;
+    }, 350);
+  }
+
+  // Placeholder — will navigate to cupping.html pre-populated
+  // with the coffees from this session once backend is wired up.
+  function reopenSession() {
+    alert('Re-cupping will be available once sessions are saved to your account.');
+  }
+
+  // Builds a single key/value row for the drawer
+  function drawerRow(key, val) {
+    return `<div class="drawer-row">
+      <span class="drawer-key">${key}</span>
+      <span class="drawer-val">${escHtml(val)}</span>
+    </div>`;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  UTILITIES
+  // ══════════════════════════════════════════════════════════
+
+  // Average score across all coffees in a session.
+  // Returns null if no scores have been entered.
+  function sessionAvgScore(session) {
+    const allScores = session.coffees.flatMap(c => Object.values(c.data.scores || {}));
+    if (!allScores.length) return null;
+    return allScores.reduce((a, b) => a + b, 0) / allScores.length;
+  }
+
+  // Average score across all attributes for a single coffee.
+  function avgScore(scores) {
+    const vals = Object.values(scores);
+    if (!vals.length) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+
+  // Formats an ISO date string (YYYY-MM-DD) for display.
+  function formatDate(iso) {
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-IE', {
+      day: 'numeric', month: 'short', year: 'numeric'
+    });
+  }
+
+  // Prevents XSS when inserting user data into innerHTML.
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Close drawer on Escape key
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeDrawer();
+  });
+
+  init();
+</script>
+</body>
+</html>

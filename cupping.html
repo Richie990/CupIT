@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Cupping Session Tool  (cupping.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    The core logged cupping experience for experienced users.
+    Allows a user to set up a session, cup multiple coffees
+    side by side, and save the full session at the end.
+    This is a front-end prototype — saving currently shows a
+    confirmation screen but does not persist to a database yet.
+
+  THREE-PHASE FLOW:
+    PHASE 1 — SETUP
+      User names the session, adds coffees (by name), and
+      selects which data fields they want to capture for this
+      session. Fields are optional because sometimes you just
+      want to cup quickly and don't need everything.
+      Optionally enables a built-in steep timer.
+
+    PHASE 2 — CUPPING
+      One coffee is shown at a time. User flips between coffees
+      via tabs. They can return to any coffee at any point —
+      important because flavour changes as coffee cools.
+      If timer was enabled, a collapsible countdown appears above
+      the tabs. A dot on each tab indicates notes have been added.
+
+    PHASE 3 — REVIEW & SAVE
+      Summary of all coffees with their data. Score fields show
+      an average badge. One save button commits the session.
+
+  KEY DATA STRUCTURES:
+    ALL_PARAMS[]   Defines every possible field. Each param has:
+                   id, label, type (text/select/scores/flavours/textarea),
+                   and options or placeholder where relevant.
+                   To add a new field type, add it here and handle
+                   it in buildPanelFields().
+
+    WHEEL[]        Flavour wheel data. Each family has an id, emoji,
+                   name, and array of specific flavour chips.
+                   To add flavours, add strings to the specifics array.
+                   To add a new family, add an object to WHEEL[].
+
+    SCORE_ATTRS[]  The attributes shown in the score slider block.
+                   Add or remove strings here to change what's scored.
+
+    coffees[]      Runtime array of { name, data:{} } objects.
+                   data holds everything the user enters for that coffee
+                   (keyed by param id, plus 'scores' and 'flavours').
+
+    activeParams   A Set of param ids the user toggled on in setup.
+                   Only params in this set are rendered in the panels.
+
+  KEY FUNCTIONS:
+    init()              Builds the param grid and seeds two blank coffees.
+    buildParamGrid()    Renders the toggle checkboxes in setup.
+    addCoffee()         Adds a blank coffee entry to coffees[].
+    startCupping()      Validates, filters unnamed coffees, builds
+                        the cupping panels, shows timer if enabled.
+    buildCuppingView()  Renders all coffee tabs and their panels.
+    buildPanelFields(ci) Renders only the active param fields for
+                        coffee at index ci.
+    switchCoffee(i)     Activates the tab and panel for coffee i.
+    savefield()         Stores a text/select field value on coffees[ci].
+    saveScore()         Stores a score slider value in coffees[ci].data.scores.
+    toggleFlavour()     Adds/removes a specific flavour chip and
+                        resets the picked display.
+    refreshPicked(ci)   Re-renders the picked flavour tags and updates
+                        family label previews for coffee ci.
+    updateTabDot(ci)    Shows/hides the "has notes" dot on the tab.
+    buildReview()       Generates the full review HTML from coffees[].
+    goTo(view)          Switches between views, updates phase bar.
+    saveSession()       Shows the saved confirmation screen.
+    resetAll()          Clears all state and returns to setup.
+
+  TIMER:
+    useTimer flag set in setup by toggling the Timer card.
+    TIMER_SECS = 240 (4 minutes — standard cupping steep time).
+    timerStartStop() handles start/pause/resume.
+    timerReset() resets display and clears interval.
+    Timer is collapsible in the cupping view via toggleTimerWidget().
+
+  FUTURE / TODO:
+    - saveSession() needs to POST session data to a backend API.
+      All the data is already in coffees[] and ready to serialise.
+    - "My sessions" nav link needs a real sessions list/dashboard page.
+    - Consider adding a "duplicate coffee" button in setup for when
+      you want to cup the same coffee at different grind settings.
+    - Offline support: session data could be saved to localStorage
+      as a draft in case the page is accidentally closed.
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#faf6ee" />
+  <title>New Cupping — CupIT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:      #faf6ee;
+      --paper:   #fff9f0;
+      --dark:    #1c0f05;
+      --brown:   #5c3317;
+      --mid:     #9b6b47;
+      --light:   #c9a882;
+      --accent:  #b85c2b;
+      --steam:   #e8ddd0;
+      --divider: rgba(92,51,23,0.12);
+      --green:   #4a6741;
+      --r:       14px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg); color: var(--dark);
+      font-size: 15px; line-height: 1.5; min-height: 100vh;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* NAV */
+    .top-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(250,246,238,0.95); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--divider);
+      padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--brown); text-decoration: none; }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-link { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid); text-decoration: none; transition: color 0.2s; }
+    .nav-link:hover { color: var(--brown); }
+
+    /* PHASE BAR */
+    .phase-bar { background: var(--dark); padding: 10px 20px; display: flex; }
+    .phase-step {
+      flex: 1; text-align: center; font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.22);
+      padding: 6px 0; position: relative; transition: color 0.3s;
+    }
+    .phase-step.active { color: var(--light); }
+    .phase-step.done   { color: rgba(255,255,255,0.4); }
+    .phase-step::after { content: '›'; position: absolute; right: 0; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.1); font-size: 0.8rem; }
+    .phase-step:last-child::after { display: none; }
+
+    /* VIEWS */
+    .view { display: none; }
+    .view.active { display: block; }
+    .view-inner { max-width: 600px; margin: 0 auto; padding: 28px 20px 120px; }
+    .view-title { font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 600; color: var(--brown); margin-bottom: 4px; }
+    .view-sub { font-size: 0.85rem; color: var(--mid); margin-bottom: 28px; line-height: 1.5; }
+
+    /* FORM */
+    .form-group { margin-bottom: 18px; }
+    .form-label { display: block; font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid); margin-bottom: 7px; }
+    .form-label .opt { font-size: 0.52rem; color: var(--light); margin-left: 6px; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; padding: 12px 14px; background: var(--paper);
+      border: 1.5px solid var(--divider); border-radius: var(--r);
+      font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+      color: var(--dark); outline: none; transition: border-color 0.2s;
+      -webkit-appearance: none; appearance: none;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--light); font-style: italic; }
+    .form-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239b6b47' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px;
+    }
+    .form-textarea { resize: vertical; min-height: 80px; line-height: 1.55; }
+
+    /* CARDS */
+    .section-card { background: var(--paper); border: 1px solid var(--divider); border-radius: 18px; padding: 20px; margin-bottom: 16px; }
+    .section-card-title { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--brown); margin-bottom: 16px; }
+
+    /* PARAM TOGGLES */
+    .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .param-toggle {
+      display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+      background: var(--bg); border: 1.5px solid var(--divider); border-radius: var(--r);
+      cursor: pointer; transition: all 0.18s; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .param-toggle:hover { border-color: var(--accent); }
+    .param-toggle.on { border-color: var(--accent); background: rgba(184,92,43,0.06); }
+    .param-check { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--divider); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.6rem; transition: all 0.18s; }
+    .param-toggle.on .param-check { background: var(--accent); border-color: var(--accent); color: white; }
+    .param-label { font-size: 0.82rem; font-weight: 500; color: var(--brown); line-height: 1.2; }
+
+    /* COFFEE LIST */
+    .coffee-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    .coffee-entry { background: var(--bg); border: 1.5px solid var(--divider); border-radius: var(--r); padding: 14px 16px; display: flex; align-items: center; gap: 12px; animation: fadeUp 0.25s ease both; }
+    .coffee-entry-num { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--accent); flex-shrink: 0; width: 22px; }
+    .coffee-entry-input { flex: 1; background: none; border: none; outline: none; font-family: 'DM Sans', sans-serif; font-size: 0.92rem; color: var(--dark); }
+    .coffee-entry-input::placeholder { color: var(--light); font-style: italic; }
+    .coffee-entry-remove { width: 26px; height: 26px; border-radius: 50%; background: rgba(92,51,23,0.06); border: none; color: var(--mid); font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
+    .coffee-entry-remove:hover { background: rgba(184,92,43,0.12); color: var(--accent); }
+    .btn-add-coffee { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 16px; background: none; border: 1.5px dashed var(--divider); border-radius: var(--r); color: var(--mid); font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: all 0.18s; }
+    .btn-add-coffee:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ACTION BAR */
+    .action-bar { position: fixed; bottom: 0; left: 0; right: 0; padding: 14px 20px 28px; background: linear-gradient(to top, var(--bg) 65%, transparent); }
+    .action-bar-inner { display: flex; gap: 10px; width: 100%; max-width: 600px; margin: 0 auto; }
+    .btn-back-action { width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0; background: var(--paper); border: 1px solid var(--divider); color: var(--mid); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .btn-back-action:hover { border-color: var(--brown); color: var(--brown); }
+    .btn-primary-action { flex: 1; height: 52px; border-radius: 14px; background: var(--brown); color: var(--paper); font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; border: none; cursor: pointer; transition: background 0.2s; }
+    .btn-primary-action:hover { background: var(--accent); }
+    .btn-primary-action.save { background: var(--green); }
+    .btn-primary-action.save:hover { background: #3a5632; }
+
+    /* COFFEE TABS */
+    .coffee-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 20px; scrollbar-width: none; }
+    .coffee-tabs::-webkit-scrollbar { display: none; }
+    .coffee-tab { flex-shrink: 0; padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--divider); background: var(--paper); font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); cursor: pointer; transition: all 0.18s; white-space: nowrap; }
+    .coffee-tab.active { background: var(--brown); border-color: var(--brown); color: var(--paper); }
+    .coffee-tab .tab-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 5px; opacity: 0; transition: opacity 0.2s; }
+    .coffee-tab.has-notes .tab-dot { opacity: 1; }
+
+    /* COFFEE PANELS */
+    .coffee-panel { display: none; animation: fadeUp 0.25s ease both; }
+    .coffee-panel.active { display: block; }
+    .coffee-panel-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 20px; }
+    .coffee-panel-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 600; color: var(--brown); }
+    .coffee-panel-num { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--light); }
+
+    /* SCORES */
+    .score-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .score-label { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mid); width: 80px; flex-shrink: 0; }
+    input[type=range] { flex: 1; height: 4px; -webkit-appearance: none; appearance: none; background: rgba(92,51,23,0.12); border-radius: 2px; outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(184,92,43,0.15); cursor: pointer; }
+    .score-val { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--accent); width: 28px; text-align: right; flex-shrink: 0; }
+
+    /* FLAVOUR PICKER */
+    .picked-flavours { display: flex; flex-wrap: wrap; gap: 7px; min-height: 20px; margin-bottom: 14px; }
+    .picked-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--brown); color: var(--paper); font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 5px 8px 5px 11px; border-radius: 20px; animation: fadeUp 0.2s ease both; }
+    .picked-chip-remove { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .picked-chip-remove:hover { background: rgba(255,255,255,0.35); }
+    .flavour-families { display: flex; flex-direction: column; gap: 7px; }
+    .family-btn { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--divider); background: var(--bg); cursor: pointer; transition: all 0.18s; width: 100%; text-align: left; -webkit-tap-highlight-color: transparent; }
+    .family-btn:hover { border-color: var(--accent); }
+    .family-btn.open { border-color: var(--accent); background: rgba(184,92,43,0.04); }
+    .family-emoji { font-size: 1.1rem; flex-shrink: 0; }
+    .family-name { font-weight: 500; font-size: 0.85rem; color: var(--brown); }
+    .family-picked { font-family: 'DM Mono', monospace; font-size: 0.54rem; color: var(--accent); letter-spacing: 0.04em; margin-left: 4px; }
+    .family-chevron { margin-left: auto; color: var(--light); font-size: 0.7rem; transition: transform 0.2s; flex-shrink: 0; }
+    .family-btn.open .family-chevron { transform: rotate(180deg); }
+    .family-specifics { display: none; flex-wrap: wrap; gap: 7px; padding: 8px 0 4px 0; }
+    .family-specifics.open { display: flex; }
+    .specific-chip { padding: 6px 12px; border-radius: 20px; border: 1.5px solid var(--divider); background: var(--paper); font-size: 0.78rem; font-weight: 500; color: var(--mid); cursor: pointer; transition: all 0.15s; -webkit-tap-highlight-color: transparent; }
+    .specific-chip:hover { border-color: var(--accent); color: var(--brown); }
+    .specific-chip.selected { background: var(--accent); border-color: var(--accent); color: white; }
+
+    /* REVIEW */
+    .review-session-name { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 600; color: var(--brown); margin-bottom: 6px; }
+    .review-meta { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--light); margin-bottom: 28px; }
+    .review-coffee { background: var(--paper); border: 1px solid var(--divider); border-radius: 18px; padding: 20px; margin-bottom: 14px; }
+    .review-coffee-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .review-coffee-name { font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 600; color: var(--brown); }
+    .review-score-badge { background: linear-gradient(135deg, var(--accent), #c8682f); color: white; font-family: 'DM Mono', monospace; font-size: 0.9rem; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .review-row { display: flex; gap: 10px; margin-bottom: 8px; font-size: 0.85rem; flex-wrap: wrap; }
+    .review-key { font-family: 'DM Mono', monospace; font-size: 0.56rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--light); width: 76px; flex-shrink: 0; padding-top: 2px; }
+    .review-val { color: var(--brown); }
+    .review-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .review-tag { font-family: 'DM Mono', monospace; font-size: 0.56rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 11px; border-radius: 20px; background: rgba(184,92,43,0.08); border: 1px solid rgba(184,92,43,0.2); color: var(--accent); }
+
+    /* SAVED */
+    .saved-state { text-align: center; padding: 60px 20px; animation: fadeUp 0.4s ease both; }
+    .saved-icon { font-size: 3rem; margin-bottom: 18px; display: block; }
+    .saved-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; color: var(--brown); margin-bottom: 10px; }
+    .saved-title em { font-style: italic; }
+    .saved-sub { font-size: 0.9rem; color: var(--mid); line-height: 1.7; margin-bottom: 28px; }
+    .btn-new { display: inline-flex; align-items: center; gap: 8px; background: var(--brown); color: var(--paper); font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 28px; border-radius: 50px; border: none; cursor: pointer; transition: background 0.2s; }
+    .btn-new:hover { background: var(--accent); }
+
+    /* TIMER */
+    .timer-toggle-btn {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 12px 16px;
+      background: var(--paper); border: 1.5px solid var(--divider);
+      border-radius: var(--r); color: var(--mid);
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      cursor: pointer; transition: all 0.18s; margin-bottom: 8px;
+    }
+    .timer-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .timer-toggle-btn.open { border-color: var(--accent); color: var(--accent); background: rgba(184,92,43,0.04); }
+
+    .timer-panel {
+      background: var(--dark); border-radius: 16px;
+      padding: 22px 20px; text-align: center;
+      animation: fadeUp 0.2s ease both;
+    }
+    .timer-display {
+      font-family: 'DM Mono', monospace; font-size: 3.2rem;
+      letter-spacing: 0.06em; color: var(--cream);
+      line-height: 1; margin-bottom: 16px;
+      transition: color 0.4s;
+    }
+    .timer-display.done { color: #8ec98e; }
+    .timer-track {
+      height: 4px; background: rgba(255,255,255,0.12);
+      border-radius: 2px; margin-bottom: 18px; overflow: hidden;
+    }
+    .timer-fill {
+      height: 100%; background: var(--light);
+      border-radius: 2px; width: 100%;
+      transition: width 1s linear;
+    }
+    .timer-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; }
+    .timer-btn {
+      padding: 9px 20px; border-radius: 30px;
+      background: rgba(255,255,255,0.1); color: var(--cream);
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      border: 1px solid rgba(255,255,255,0.15); cursor: pointer;
+      transition: background 0.2s;
+    }
+    .timer-btn:hover { background: rgba(255,255,255,0.18); }
+    .timer-btn-ghost { background: transparent; opacity: 0.5; }
+    .timer-btn-ghost:hover { background: rgba(255,255,255,0.08); opacity: 1; }
+    .timer-hint {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(255,255,255,0.2);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a href="dashboard.html" class="nav-logo">Cup<em>IT</em></a>
+  <div style="display:flex;align-items:center;gap:20px">
+    <a href="history.html" class="nav-link">My sessions</a>
+    <a href="cupping.html" class="nav-link" style="color:var(--brown);font-weight:500">New session</a>
+  </div>
+</nav>
+
+<div class="phase-bar">
+  <div class="phase-step active" id="phase-1">Setup</div>
+  <div class="phase-step" id="phase-2">Cupping</div>
+  <div class="phase-step" id="phase-3">Review & Save</div>
+</div>
+
+
+<!-- ══ SETUP ══ -->
+<div class="view active" id="view-setup">
+  <div class="view-inner">
+    <p class="view-title">Set up your session</p>
+    <p class="view-sub">Name it, add your coffees, and choose what you want to capture this time.</p>
+
+    <div class="section-card">
+      <p class="section-card-title">Session name</p>
+      <div class="form-group" style="margin-bottom:0">
+        <input type="text" id="session-name" class="form-input" placeholder="e.g. Saturday morning — Kenyan naturals" />
+      </div>
+    </div>
+
+    <div class="section-card">
+      <p class="section-card-title">Coffees</p>
+      <div class="coffee-list" id="coffee-list"></div>
+      <button class="btn-add-coffee" onclick="addCoffee()">+ Add a coffee</button>
+    </div>
+
+    <div class="section-card">
+      <p class="section-card-title">What do you want to capture?</p>
+      <p style="font-size:0.82rem;color:var(--mid);margin-bottom:14px;line-height:1.5">Toggle the fields that matter for this session.</p>
+      <div class="param-grid" id="param-grid"></div>
+    </div>
+
+    <div class="section-card">
+      <p class="section-card-title">Timer</p>
+      <div class="param-toggle" id="timer-toggle" onclick="toggleTimer(this)" style="width:100%">
+        <span class="param-check" id="timer-check"></span>
+        <div>
+          <span class="param-label">Include a steep timer</span>
+          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">A collapsible 4-minute timer will appear during the session — show or hide it as needed.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <div class="action-bar-inner">
+      <button class="btn-primary-action" onclick="startCupping()">Start cupping →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ CUPPING ══ -->
+<div class="view" id="view-cupping">
+  <div class="view-inner">
+
+    <!-- Timer widget (shown only if enabled in setup) -->
+    <div id="timer-widget" style="display:none;margin-bottom:18px">
+      <button class="timer-toggle-btn" onclick="toggleTimerWidget()">
+        <span id="timer-toggle-label">⏱ Show timer</span>
+      </button>
+      <div class="timer-panel" id="timer-panel" style="display:none">
+        <div class="timer-display" id="timer-display">4:00</div>
+        <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
+        <div class="timer-actions">
+          <button class="timer-btn" id="timer-start-btn" onclick="timerStartStop()">▶ Start</button>
+          <button class="timer-btn timer-btn-ghost" onclick="timerReset()">Reset</button>
+        </div>
+        <p class="timer-hint" id="timer-hint">4 minutes · standard cupping steep</p>
+      </div>
+    </div>
+
+    <div class="coffee-tabs" id="coffee-tabs"></div>
+    <div id="coffee-panels"></div>
+  </div>
+  <div class="action-bar">
+    <div class="action-bar-inner">
+      <button class="btn-back-action" onclick="goTo('setup')">←</button>
+      <button class="btn-primary-action" onclick="goTo('review')">Review & save →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ REVIEW ══ -->
+<div class="view" id="view-review">
+  <div class="view-inner">
+    <p class="view-title" style="margin-bottom:6px">Review your session</p>
+    <p class="view-sub">Check everything looks right before saving.</p>
+    <div id="review-content"></div>
+  </div>
+  <div class="action-bar">
+    <div class="action-bar-inner">
+      <button class="btn-back-action" onclick="goTo('cupping')">←</button>
+      <button class="btn-primary-action save" onclick="saveSession()">Save session ✓</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ SAVED ══ -->
+<div class="view" id="view-saved">
+  <div class="view-inner">
+    <div class="saved-state">
+      <span class="saved-icon">☕</span>
+      <h2 class="saved-title">Session <em>saved</em></h2>
+      <p class="saved-sub" id="saved-sub"></p>
+      <button class="btn-new" onclick="resetAll()">Start a new session →</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  // ══════════════════════════════════════════════════════════
+  //  DATA DEFINITIONS
+  //  These arrays define what the app knows about. Edit here
+  //  to add new fields, flavours or score attributes.
+  // ══════════════════════════════════════════════════════════
+
+  // ALL_PARAMS defines every possible field a user can capture.
+  // 'type' controls how the field is rendered in buildPanelFields():
+  //   text     → plain text input
+  //   select   → dropdown (options array required)
+  //   scores   → group of range sliders (uses SCORE_ATTRS)
+  //   flavours → the interactive flavour wheel picker
+  //   textarea → multi-line free text
+  const ALL_PARAMS = [
+    { id:'origin',   label:'Origin',        type:'text',     placeholder:'e.g. Ethiopia, Yirgacheffe' },
+    { id:'roaster',  label:'Roaster',       type:'text',     placeholder:'Who roasted it?' },
+    { id:'process',  label:'Process',       type:'select',   options:['Washed','Natural','Honey','Anaerobic','Other'] },
+    { id:'roast',    label:'Roast Level',   type:'select',   options:['Light','Medium-Light','Medium','Medium-Dark','Dark'] },
+    { id:'brew',     label:'Brew Method',   type:'select',   options:['Cupping','Pour Over','AeroPress','French Press','Espresso','Cold Brew'] },
+    { id:'score',    label:'Score',         type:'scores' },
+    { id:'flavours', label:'Flavour Notes', type:'flavours' },
+    { id:'notes',    label:'Tasting Notes', type:'textarea', placeholder:'Free-form impressions...' },
+  ];
+
+  // WHEEL defines the flavour picker structure.
+  // Each family has an id, emoji, display name, and a flat array
+  // of specific flavour chips shown when the family is expanded.
+  // To add a flavour: push a string into the relevant specifics array.
+  // To add a family: push a new object into WHEEL.
+  const WHEEL = [
+    { id:'fruity',  emoji:'🍓', name:'Fruity',         specifics:['Blackberry','Raspberry','Blueberry','Strawberry','Lemon','Lime','Orange','Grapefruit','Peach','Apricot','Cherry','Mango','Pineapple','Passion Fruit','Raisin','Prune'] },
+    { id:'floral',  emoji:'🌸', name:'Floral',         specifics:['Jasmine','Rose','Lavender','Orange Blossom','Elderflower','Black Tea','Chamomile'] },
+    { id:'sweet',   emoji:'🍯', name:'Sweet',          specifics:['Vanilla','Cream','Caramel','Toffee','Honey','Brown Sugar','Maple Syrup','Dark Chocolate','Milk Chocolate','Cocoa'] },
+    { id:'nutty',   emoji:'🥜', name:'Nutty',          specifics:['Almond','Hazelnut','Peanut','Walnut','Pecan','Cocoa Powder'] },
+    { id:'spices',  emoji:'🌶', name:'Spices',         specifics:['Cinnamon','Cardamom','Nutmeg','Ginger','Clove','Pepper'] },
+    { id:'roasted', emoji:'🔥', name:'Roasted',        specifics:['Malt','Toast','Biscuit','Smoky','Ashy','Bitter'] },
+    { id:'veggie',  emoji:'🌿', name:'Veggie / Earthy',specifics:['Grass','Green Tea','Herb','Mushroom','Earthy','Woody','Cedar'] },
+    { id:'sour',    emoji:'🍋', name:'Sour / Fermented',specifics:['Citric','Bright','Sour','Tangy','Winey','Yeasty','Funky'] },
+  ];
+
+  // SCORE_ATTRS are the attributes shown as sliders in the score block.
+  // Add or remove strings here to change what gets scored.
+  const SCORE_ATTRS = ['Acidity','Body','Sweetness','Finish','Balance'];
+
+
+  // ══════════════════════════════════════════════════════════
+  //  STATE
+  //  All runtime state lives here. Nothing is persisted to
+  //  localStorage yet — see TODO in file header.
+  // ══════════════════════════════════════════════════════════
+
+  // coffees[] is the core data store. Each entry is:
+  //   { name: string, data: { [paramId]: value, scores: {}, flavours: [] } }
+  let coffees = [];
+
+  // activeParams tracks which fields the user toggled on in setup.
+  // Defaults to the three most commonly used fields.
+  let activeParams = new Set(['flavours','score','notes']);
+
+  let currentView = 'setup'; // tracks which view is showing
+
+  let useTimer = false; // whether the user enabled the steep timer in setup
+
+  // Timer state — 4 minutes (240s) is the standard cupping steep time
+  const TIMER_SECS   = 240;
+  let timerRemaining = TIMER_SECS;
+  let timerRunning   = false;
+  let timerInterval  = null;
+
+
+  // ══════════════════════════════════════════════════════════
+  //  INIT
+  //  Called once on page load. Seeds two blank coffees so the
+  //  setup screen doesn't look empty.
+  // ══════════════════════════════════════════════════════════
+  function init() {
+    buildParamGrid();
+    addCoffee();
+    addCoffee();
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  TIMER — SETUP TOGGLE
+  //  Handles the timer on/off toggle card in phase 1 (setup).
+  // ══════════════════════════════════════════════════════════
+  function toggleTimer(el) {
+    useTimer = !useTimer;
+    el.classList.toggle('on', useTimer);
+    document.getElementById('timer-check').textContent = useTimer ? '✓' : '';
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  TIMER — CUPPING VIEW CONTROLS
+  //  The timer widget is always rendered in the cupping view
+  //  but hidden if useTimer is false. It can be shown/hidden
+  //  at will by the user during the session.
+  // ══════════════════════════════════════════════════════════
+
+  // Expands or collapses the timer panel without resetting it.
+  function toggleTimerWidget() {
+    const panel = document.getElementById('timer-panel');
+    const btn   = document.querySelector('.timer-toggle-btn');
+    const label = document.getElementById('timer-toggle-label');
+    const open  = panel.style.display === 'none';
+    panel.style.display = open ? 'block' : 'none';
+    btn.classList.toggle('open', open);
+    label.textContent = open ? '⏱ Hide timer' : '⏱ Show timer';
+  }
+
+  // Starts the countdown if stopped, pauses if running.
+  // On completion updates the display to "Done ✓" and changes
+  // the hint text to prompt breaking the crust.
+  function timerStartStop() {
+    const btn = document.getElementById('timer-start-btn');
+    if (timerRunning) {
+      clearInterval(timerInterval);
+      timerRunning = false;
+      btn.textContent = '▶ Resume';
+    } else {
+      timerRunning = true;
+      btn.textContent = '⏸ Pause';
+      timerInterval = setInterval(() => {
+        timerRemaining--;
+        updateTimerDisplay();
+        if (timerRemaining <= 0) {
+          clearInterval(timerInterval);
+          timerRunning = false;
+          document.getElementById('timer-display').classList.add('done');
+          document.getElementById('timer-display').textContent = 'Done ✓';
+          document.getElementById('timer-fill').style.width = '0%';
+          document.getElementById('timer-start-btn').textContent = '✓ Time\'s up';
+          document.getElementById('timer-hint').textContent = 'Steep complete — break the crust';
+        }
+      }, 1000);
+    }
+  }
+
+  // Resets everything back to 4:00. Safe to call at any time.
+  function timerReset() {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    timerRemaining = TIMER_SECS;
+    const display = document.getElementById('timer-display');
+    display.classList.remove('done');
+    display.textContent = '4:00';
+    document.getElementById('timer-fill').style.width = '100%';
+    document.getElementById('timer-start-btn').textContent = '▶ Start';
+    document.getElementById('timer-hint').textContent = '4 minutes · standard cupping steep';
+  }
+
+  // Updates the time display and fill bar. Called every second by setInterval.
+  function updateTimerDisplay() {
+    const m = Math.floor(timerRemaining / 60);
+    const s = timerRemaining % 60;
+    const display = document.getElementById('timer-display');
+    const fill    = document.getElementById('timer-fill');
+    if (display) display.textContent = `${m}:${String(s).padStart(2,'0')}`;
+    if (fill)    fill.style.width = (timerRemaining / TIMER_SECS * 100) + '%';
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 1 — SETUP
+  // ══════════════════════════════════════════════════════════
+
+  // Renders the parameter toggle grid from ALL_PARAMS.
+  // Already-active params are shown as checked.
+  function buildParamGrid() {
+    document.getElementById('param-grid').innerHTML = ALL_PARAMS.map(p => `
+      <div class="param-toggle ${activeParams.has(p.id) ? 'on' : ''}" onclick="toggleParam('${p.id}',this)">
+        <span class="param-check">${activeParams.has(p.id) ? '✓' : ''}</span>
+        <span class="param-label">${p.label}</span>
+      </div>`).join('');
+  }
+
+  // Adds or removes a param from the activeParams Set.
+  // The same toggle element style is shared with the timer toggle.
+  function toggleParam(id, el) {
+    activeParams.has(id) ? activeParams.delete(id) : activeParams.add(id);
+    el.classList.toggle('on', activeParams.has(id));
+    el.querySelector('.param-check').textContent = activeParams.has(id) ? '✓' : '';
+  }
+
+  // Appends a blank coffee object and re-renders the list.
+  function addCoffee() {
+    coffees.push({ name:'', data:{} });
+    renderCoffeeList();
+  }
+
+  // Removes a coffee by index. Prevents removing the last one.
+  function removeCoffee(i) {
+    if (coffees.length <= 1) return;
+    coffees.splice(i, 1);
+    renderCoffeeList();
+  }
+
+  // Renders the list of coffee name inputs in setup.
+  // Values are written directly back to coffees[i].name on input.
+  function renderCoffeeList() {
+    document.getElementById('coffee-list').innerHTML = coffees.map((c,i) => `
+      <div class="coffee-entry">
+        <span class="coffee-entry-num">0${i+1}</span>
+        <input class="coffee-entry-input" type="text" placeholder="Coffee name / roaster"
+          value="${escHtml(c.name)}" oninput="coffees[${i}].name=this.value" />
+        <button class="coffee-entry-remove" onclick="removeCoffee(${i})">✕</button>
+      </div>`).join('');
+  }
+
+  // Validates that at least one coffee has a name, strips unnamed
+  // entries, then transitions to the cupping view.
+  function startCupping() {
+    const named = coffees.filter(c => c.name.trim());
+    if (!named.length) {
+      // Focus the first input so the user knows what's missing
+      document.querySelector('.coffee-entry-input')?.focus();
+      return;
+    }
+    coffees = coffees.filter(c => c.name.trim());
+    buildCuppingView();
+    // Show or hide the timer widget based on setup choice
+    document.getElementById('timer-widget').style.display = useTimer ? 'block' : 'none';
+    timerReset(); // always reset to 4:00 when entering the cupping view
+    goTo('cupping');
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 2 — CUPPING
+  //  Builds the tab + panel structure for all coffees.
+  //  Each panel shows only the fields the user activated in setup.
+  // ══════════════════════════════════════════════════════════
+
+  function buildCuppingView() {
+    // Build tab strip — one tab per coffee
+    document.getElementById('coffee-tabs').innerHTML = coffees.map((c,i) => `
+      <button class="coffee-tab ${i===0?'active':''}" id="ctab-${i}" onclick="switchCoffee(${i})">
+        <span class="tab-dot"></span>${escHtml(c.name)}
+      </button>`).join('');
+
+    // Build panels — one per coffee, only first is visible
+    document.getElementById('coffee-panels').innerHTML = coffees.map((c,i) =>
+      `<div class="coffee-panel ${i===0?'active':''}" id="cpanel-${i}">
+        <div class="coffee-panel-header">
+          <span class="coffee-panel-name">${escHtml(c.name)}</span>
+          <span class="coffee-panel-num">${i+1} of ${coffees.length}</span>
+        </div>
+        ${buildPanelFields(i)}
+       </div>`).join('');
+  }
+
+  // Renders only the fields that were toggled on in setup.
+  // Dispatches to specialised builders for scores and flavours.
+  function buildPanelFields(ci) {
+    return ALL_PARAMS
+      .filter(p => activeParams.has(p.id))
+      .map(p => {
+        if (p.type === 'scores')   return buildScores(ci);
+        if (p.type === 'flavours') return buildFlavourPicker(ci);
+        if (p.type === 'textarea') return `
+          <div class="section-card">
+            <p class="section-card-title">${p.label}</p>
+            <textarea class="form-textarea" placeholder="${p.placeholder||''}"
+              oninput="savefield(${ci},'${p.id}',this.value)"
+            >${escHtml(coffees[ci].data[p.id]||'')}</textarea>
+          </div>`;
+        if (p.type === 'select') {
+          const val = coffees[ci].data[p.id]||'';
+          return `
+            <div class="form-group">
+              <label class="form-label">${p.label}</label>
+              <select class="form-select" onchange="savefield(${ci},'${p.id}',this.value)">
+                <option value="">— Select —</option>
+                ${p.options.map(o=>`<option value="${o}"${val===o?' selected':''}>${o}</option>`).join('')}
+              </select>
+            </div>`;
+        }
+        // Default: plain text input
+        return `
+          <div class="form-group">
+            <label class="form-label">${p.label}</label>
+            <input type="text" class="form-input" placeholder="${p.placeholder||''}"
+              value="${escHtml(coffees[ci].data[p.id]||'')}"
+              oninput="savefield(${ci},'${p.id}',this.value)" />
+          </div>`;
+      }).join('');
+  }
+
+  // Builds the score slider block for coffee ci.
+  // Sliders range 1–10 in 0.5 steps. Default value is 7.
+  // Scores are stored in coffees[ci].data.scores[attr].
+  function buildScores(ci) {
+    const scores = coffees[ci].data.scores || {};
+    return `<div class="section-card">
+      <p class="section-card-title">Score</p>
+      ${SCORE_ATTRS.map(attr => {
+        const val = scores[attr] ?? 7;
+        return `<div class="score-row">
+          <span class="score-label">${attr}</span>
+          <input type="range" min="1" max="10" step="0.5" value="${val}"
+            oninput="saveScore(${ci},'${attr}',this.value);this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)" />
+          <span class="score-val">${parseFloat(val).toFixed(1)}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // Builds the collapsible flavour wheel picker for coffee ci.
+  // WHEEL families are rendered as expandable rows. When a family
+  // is expanded, specific chips are shown. Selected chips are
+  // highlighted and listed above in the picked-flavours row.
+  function buildFlavourPicker(ci) {
+    const picked = coffees[ci].data.flavours || [];
+    return `<div class="section-card">
+      <p class="section-card-title">Flavour Notes</p>
+      <div class="picked-flavours" id="picked-${ci}">
+        ${renderPickedChips(ci, picked)}
+      </div>
+      <div class="flavour-families">
+        ${WHEEL.map(fam => {
+          const fp = picked.filter(f => fam.specifics.includes(f));
+          return `<div>
+            <button class="family-btn" onclick="toggleFamily(this,'${fam.id}-${ci}')">
+              <span class="family-emoji">${fam.emoji}</span>
+              <span class="family-name">${fam.name}</span>
+              ${fp.length ? `<span class="family-picked">${fp.join(', ')}</span>` : ''}
+              <span class="family-chevron">▾</span>
+            </button>
+            <div class="family-specifics" id="${fam.id}-${ci}">
+              ${fam.specifics.map(s => `
+                <span class="specific-chip${picked.includes(s)?' selected':''}"
+                  onclick="toggleFlavour(${ci},'${fam.id}','${s}',this)">${s}</span>`).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Renders the picked flavour tags with remove buttons.
+  // Called both from buildFlavourPicker and refreshPicked.
+  function renderPickedChips(ci, picked) {
+    return picked.map(f => `
+      <span class="picked-chip">${escHtml(f)}
+        <button class="picked-chip-remove" onclick="removeFlavour(${ci},'${f}')">✕</button>
+      </span>`).join('');
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  CUPPING INTERACTIONS
+  //  These functions handle all user input during phase 2.
+  // ══════════════════════════════════════════════════════════
+
+  // Switches the active tab and panel to coffee index i.
+  function switchCoffee(i) {
+    document.querySelectorAll('.coffee-tab').forEach((t,j)   => t.classList.toggle('active', j===i));
+    document.querySelectorAll('.coffee-panel').forEach((p,j) => p.classList.toggle('active', j===i));
+  }
+
+  // Stores a plain field value (text, select, textarea) on the coffee object.
+  function savefield(ci, field, val) {
+    coffees[ci].data[field] = val;
+    updateTabDot(ci); // show dot if any field has been filled
+  }
+
+  // Stores a score slider value. Initialises the scores object if needed.
+  function saveScore(ci, attr, val) {
+    if (!coffees[ci].data.scores) coffees[ci].data.scores = {};
+    coffees[ci].data.scores[attr] = parseFloat(val);
+    updateTabDot(ci);
+  }
+
+  // Expands or collapses a flavour family row.
+  // id is the DOM id of the specifics container (e.g. "fruity-0").
+  function toggleFamily(btn, id) {
+    const open = btn.classList.toggle('open');
+    document.getElementById(id).classList.toggle('open', open);
+  }
+
+  // Adds or removes a specific flavour chip from coffees[ci].data.flavours.
+  // Also toggles the chip's selected class and refreshes the picked row.
+  function toggleFlavour(ci, famId, specific, chipEl) {
+    if (!coffees[ci].data.flavours) coffees[ci].data.flavours = [];
+    const idx = coffees[ci].data.flavours.indexOf(specific);
+    if (idx > -1) {
+      coffees[ci].data.flavours.splice(idx, 1);
+      chipEl.classList.remove('selected');
+    } else {
+      coffees[ci].data.flavours.push(specific);
+      chipEl.classList.add('selected');
+    }
+    refreshPicked(ci);
+    updateTabDot(ci);
+  }
+
+  // Removes a flavour from the picked list (called from the ✕ on a tag).
+  // Also unchecks the chip if the relevant family panel is currently open.
+  function removeFlavour(ci, specific) {
+    coffees[ci].data.flavours = (coffees[ci].data.flavours||[]).filter(f => f !== specific);
+    // uncheck chip in DOM if visible
+    document.querySelectorAll(`#cpanel-${ci} .specific-chip`).forEach(el => {
+      if (el.textContent.trim() === specific) el.classList.remove('selected');
+    });
+    refreshPicked(ci);
+    updateTabDot(ci);
+  }
+
+  // Re-renders the picked flavour tags for coffee ci and updates
+  // the family preview labels (the small text showing which specifics
+  // from that family are selected, visible even when collapsed).
+  function refreshPicked(ci) {
+    const container = document.getElementById('picked-' + ci);
+    if (!container) return;
+    const picked = coffees[ci].data.flavours || [];
+    container.innerHTML = renderPickedChips(ci, picked);
+
+    // Update the preview label on each family button
+    WHEEL.forEach(fam => {
+      const btn = document.querySelector(`#cpanel-${ci} [onclick="toggleFamily(this,'${fam.id}-${ci}')"]`);
+      if (!btn) return;
+      const fp = picked.filter(f => fam.specifics.includes(f));
+      let lbl = btn.querySelector('.family-picked');
+      if (!lbl && fp.length) {
+        lbl = document.createElement('span');
+        lbl.className = 'family-picked';
+        btn.insertBefore(lbl, btn.querySelector('.family-chevron'));
+      }
+      if (lbl) lbl.textContent = fp.join(', ');
+    });
+  }
+
+  // Shows or hides the small amber dot on a coffee tab.
+  // Dot is shown whenever any field on that coffee has been touched.
+  function updateTabDot(ci) {
+    const tab = document.getElementById('ctab-' + ci);
+    if (!tab) return;
+    const d = coffees[ci].data;
+    const has = Object.keys(d).some(k => {
+      if (k === 'flavours') return d.flavours?.length;
+      if (k === 'scores')   return Object.keys(d.scores||{}).length;
+      return !!d[k];
+    });
+    tab.classList.toggle('has-notes', has);
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 3 — REVIEW & SAVE
+  // ══════════════════════════════════════════════════════════
+
+  // Generates the review HTML from the current coffees[] state.
+  // Only shows fields that were active in setup (activeParams).
+  // Score badge shows the average across all scored attributes.
+  function buildReview() {
+    const name = document.getElementById('session-name').value.trim() || 'Untitled session';
+    const now  = new Date().toLocaleDateString('en-IE', { day:'numeric', month:'long', year:'numeric' });
+
+    let html = `<p class="review-session-name">${escHtml(name)}</p>
+      <p class="review-meta">${coffees.length} coffee${coffees.length>1?'s':''} · ${now}</p>`;
+
+    coffees.forEach((c,i) => {
+      const d = c.data;
+      const scores = d.scores || {};
+      // Average score across all scored attributes (null if none scored)
+      const avg = Object.keys(scores).length
+        ? (Object.values(scores).reduce((a,b)=>a+b,0) / Object.keys(scores).length).toFixed(1)
+        : null;
+
+      html += `<div class="review-coffee">
+        <div class="review-coffee-header">
+          <span class="review-coffee-name">${escHtml(c.name)}</span>
+          ${avg ? `<span class="review-score-badge">${avg}</span>` : ''}
+        </div>`;
+
+      // Render text/select fields
+      ['origin','roaster','process','roast','brew'].forEach(k => {
+        if (activeParams.has(k) && d[k]) {
+          const label = ALL_PARAMS.find(p=>p.id===k)?.label||k;
+          html += `<div class="review-row"><span class="review-key">${label}</span><span class="review-val">${escHtml(d[k])}</span></div>`;
+        }
+      });
+
+      // Render score breakdown inline
+      if (activeParams.has('score') && Object.keys(scores).length) {
+        html += `<div class="review-row"><span class="review-key">Scores</span><span class="review-val">${Object.entries(scores).map(([k,v])=>`${k} ${v}`).join(' · ')}</span></div>`;
+      }
+
+      // Render free-text notes
+      if (activeParams.has('notes') && d.notes) {
+        html += `<div class="review-row" style="flex-direction:column;gap:4px"><span class="review-key">Notes</span><span class="review-val" style="color:var(--mid);font-style:italic;font-size:0.88rem">${escHtml(d.notes)}</span></div>`;
+      }
+
+      // Render flavour tags
+      if (activeParams.has('flavours') && d.flavours?.length) {
+        html += `<div class="review-tags">${d.flavours.map(f=>`<span class="review-tag">${escHtml(f)}</span>`).join('')}</div>`;
+      }
+
+      html += `</div>`;
+    });
+
+    document.getElementById('review-content').innerHTML = html;
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  NAVIGATION
+  //  All view transitions go through goTo(). The phase bar is
+  //  updated to match whenever the view changes.
+  // ══════════════════════════════════════════════════════════
+
+  // Switches to a named view ('setup','cupping','review','saved').
+  // Triggers buildReview() automatically when entering the review view.
+  function goTo(view) {
+    if (view === 'review') buildReview();
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + view).classList.add('active');
+    currentView = view;
+    // Phase bar: setup=1, cupping=2, review/saved=3
+    const map = { setup:1, cupping:2, review:3, saved:3 };
+    const active = map[view]||1;
+    [1,2,3].forEach(n => {
+      document.getElementById('phase-'+n).classList.toggle('active', n===active);
+      document.getElementById('phase-'+n).classList.toggle('done', n<active);
+    });
+    window.scrollTo({ top:0, behavior:'smooth' });
+  }
+
+  // Currently shows a confirmation screen only.
+  // TODO: Replace with a real API call to persist the session.
+  function saveSession() {
+    const name = document.getElementById('session-name').value.trim() || 'Untitled session';
+    document.getElementById('saved-sub').textContent =
+      `"${name}" with ${coffees.length} coffee${coffees.length>1?'s':''} has been saved to your journal.`;
+    goTo('saved');
+  }
+
+  // Resets all state completely and returns to setup.
+  // Called from "Start a new session" on the saved screen.
+  function resetAll() {
+    coffees = [];
+    activeParams = new Set(['flavours','score','notes']);
+    useTimer = false;
+    clearInterval(timerInterval);
+    timerRunning = false;
+    timerRemaining = TIMER_SECS;
+    document.getElementById('session-name').value = '';
+    document.getElementById('timer-toggle').classList.remove('on');
+    document.getElementById('timer-check').textContent = '';
+    document.getElementById('timer-widget').style.display = 'none';
+    document.getElementById('timer-panel').style.display = 'none';
+    buildParamGrid();
+    addCoffee();
+    addCoffee();
+    goTo('setup');
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  //  UTILITIES
+  // ══════════════════════════════════════════════════════════
+
+  // escHtml prevents XSS when inserting user-entered strings into innerHTML.
+  // Always use this when rendering coffees[].name or any user input.
+  function escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Kick everything off
+  init();
+</script>
+</body>
+</html>

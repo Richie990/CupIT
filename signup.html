@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Account Sign Up  (signup.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    Account creation page. Reached from familiar.html CTAs.
+    Offers two sign-up methods selectable via tabs:
+      1. Email + password  (traditional, with strength meter)
+      2. Magic link        (passwordless — just an email address)
+
+  FORM FIELDS (shared across both methods):
+    Name         Required. First name is fine.
+    Company      Optional. Roaster, café, importer etc.
+    Occupation   Optional. Barista, roaster, home brewer etc.
+    Use type     Required. Personal or Commercial — two tap tiles.
+
+  FORM FIELDS (method-specific):
+    Password mode: email, password (with show/hide + strength bar),
+                   confirm password.
+    Magic link mode: email only.
+
+  KEY JAVASCRIPT:
+    switchMode(mode)         Toggles between 'password' and 'magic'
+                             tab views. Shared fields stay visible.
+    validateSharedFields()   Validates name and use-type before
+                             allowing submission.
+    submitPassword()         Validates all password fields, then
+                             calls showSuccess() if valid.
+    submitMagic()            Validates email, then calls showSuccess().
+    showSuccess(email, mode) Hides the form, shows the confirmation
+                             state with appropriate message.
+    checkStrength(pw)        Live password strength meter —
+                             5 levels from "Too weak" to "Strong".
+    selectUse(el)            Handles the Personal/Commercial tile
+                             selection, stores in selectedUse var.
+
+  CURRENT STATE:
+    The form is front-end only — no real auth backend yet.
+    showSuccess() simply shows a confirmation UI without actually
+    creating an account or sending an email. Wire up to a real
+    auth provider (e.g. Supabase, Firebase, Auth0) when ready.
+
+  FUTURE / TODO:
+    - Connect to auth backend. Replace showSuccess() logic with
+      a real API call.
+    - Add a "Log in" page (currently the log-in link is a # placeholder).
+    - Consider adding social auth (Google/Apple) as a third tab
+      if demand warrants it.
+    - Terms of Service and Privacy Policy pages need to be created;
+      links currently point to #.
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1c0f05" />
+  <title>Create Account — CupIT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:      #faf6ee;
+      --paper:   #fff9f0;
+      --dark:    #1c0f05;
+      --brown:   #5c3317;
+      --mid:     #9b6b47;
+      --light:   #c9a882;
+      --accent:  #b85c2b;
+      --cream:   #f5e9d0;
+      --steam:   #e8ddd0;
+      --divider: rgba(92,51,23,0.12);
+      --green:   #4a6741;
+      --r:       14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Crimson Pro', Georgia, serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      font-size: 17px;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: var(--dark);
+      padding: 18px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-back {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(201,168,130,0.4); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-back:hover { color: var(--light); }
+
+    /* ── DARK HEADER ── */
+    .page-header {
+      background: var(--dark);
+      padding: 48px 24px 56px;
+      text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(184,92,43,0.25) 0%, transparent 65%);
+    }
+    .page-header-content { position: relative; z-index: 1; }
+    .page-header-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 14px; display: block;
+    }
+    .page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+    }
+    .page-header h1 em { font-style: italic; color: var(--light); }
+    .page-header-sub {
+      font-size: 0.95rem; color: rgba(245,233,208,0.5);
+      margin-top: 10px; font-weight: 300; line-height: 1.6;
+    }
+
+    /* ── FORM CONTAINER ── */
+    .form-container {
+      flex: 1; padding: 48px 20px 80px;
+      display: flex; align-items: flex-start; justify-content: center;
+    }
+    .form-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 20px;
+      padding: 36px 32px;
+      width: 100%; max-width: 440px;
+      box-shadow: 0 4px 32px rgba(92,51,23,0.08);
+      animation: fadeUp 0.5s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── MODE TABS ── */
+    .mode-tabs {
+      display: flex; gap: 0;
+      background: var(--steam);
+      border-radius: 10px; padding: 4px;
+      margin-bottom: 28px;
+    }
+    .mode-tab {
+      flex: 1; padding: 9px 12px; border-radius: 8px;
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); cursor: pointer; border: none;
+      background: transparent; transition: all 0.2s;
+      text-align: center;
+    }
+    .mode-tab.active {
+      background: var(--paper); color: var(--brown);
+      box-shadow: 0 1px 4px rgba(92,51,23,0.1);
+    }
+
+    /* ── FORM FIELDS ── */
+    .form-group { margin-bottom: 18px; }
+    .form-label {
+      display: block;
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 7px;
+    }
+    .form-input {
+      width: 100%; padding: 13px 16px;
+      background: var(--bg);
+      border: 1.5px solid var(--divider);
+      border-radius: var(--r);
+      font-family: 'Crimson Pro', serif; font-size: 1rem;
+      color: var(--dark); outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--light); font-style: italic; }
+    .form-input.error { border-color: #c0392b; }
+
+    .form-hint {
+      font-size: 0.78rem; color: var(--mid);
+      margin-top: 5px; line-height: 1.4; font-weight: 300;
+    }
+    .form-error {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: #c0392b; margin-top: 5px; display: none;
+    }
+    .form-error.show { display: block; }
+
+    /* Password strength */
+    .strength-bar-wrap {
+      height: 3px; background: var(--divider);
+      border-radius: 2px; margin-top: 8px; overflow: hidden;
+    }
+    .strength-bar {
+      height: 100%; border-radius: 2px;
+      transition: width 0.3s, background 0.3s;
+      width: 0%;
+    }
+    .strength-label {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); margin-top: 4px; height: 14px;
+    }
+
+    /* Show/hide password */
+    .password-wrap { position: relative; }
+    .toggle-pw {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--light); background: none; border: none;
+      cursor: pointer; transition: color 0.2s; padding: 4px;
+    }
+    .toggle-pw:hover { color: var(--mid); }
+
+    /* ── DIVIDER ── */
+    .or-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 22px 0;
+    }
+    .or-divider::before, .or-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--divider);
+    }
+    .or-divider span {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--light);
+    }
+
+    /* ── MAGIC LINK SECTION ── */
+    .magic-section { display: none; }
+    .magic-section.active { display: block; }
+    .pw-section { display: block; }
+    .pw-section.hidden { display: none; }
+
+    /* ── SUBMIT ── */
+    .btn-submit {
+      width: 100%; padding: 15px;
+      background: var(--brown); color: var(--paper);
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border: none; border-radius: 50px; cursor: pointer;
+      transition: all 0.2s; margin-top: 4px;
+    }
+    .btn-submit:hover { background: var(--accent); }
+    .btn-submit:disabled { opacity: 0.45; pointer-events: none; }
+
+    /* ── TERMS ── */
+    /* Use selector */
+    .use-selector {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      margin-top: 6px;
+    }
+    .use-opt {
+      display: flex; flex-direction: column; align-items: flex-start;
+      gap: 4px; padding: 14px;
+      background: var(--bg); border: 1.5px solid var(--divider);
+      border-radius: var(--r); cursor: pointer; transition: all 0.18s;
+      text-align: left; -webkit-tap-highlight-color: transparent;
+    }
+    .use-opt:hover { border-color: var(--accent); }
+    .use-opt.selected { border-color: var(--accent); background: rgba(184,92,43,0.06); }
+    .use-icon { font-size: 1.3rem; }
+    .use-label {
+      font-family: 'Playfair Display', serif; font-size: 0.92rem;
+      font-weight: 600; color: var(--brown);
+    }
+    .use-desc {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.04em; color: var(--mid); line-height: 1.4;
+    }
+    .form-divider { height: 1px; background: var(--divider); margin: 24px 0; }
+
+    .form-terms {
+      font-size: 0.78rem; color: var(--light);
+      text-align: center; margin-top: 16px;
+      line-height: 1.5; font-weight: 300;
+    }
+    .form-terms a { color: var(--mid); text-decoration: underline; }
+
+    /* ── LOG IN LINK ── */
+    .login-link {
+      text-align: center; margin-top: 22px;
+      font-size: 0.88rem; color: var(--mid);
+    }
+    .login-link a {
+      color: var(--brown); text-decoration: none; font-weight: 400;
+      border-bottom: 1px solid var(--divider); transition: border-color 0.2s;
+    }
+    .login-link a:hover { border-color: var(--brown); }
+
+    /* ── SUCCESS STATE ── */
+    .success-state {
+      display: none; text-align: center; padding: 20px 0;
+    }
+    .success-icon { font-size: 2.8rem; margin-bottom: 16px; display: block; }
+    .success-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem; color: var(--brown); margin-bottom: 8px;
+    }
+    .success-title em { font-style: italic; }
+    .success-body { font-size: 0.9rem; color: var(--mid); line-height: 1.65; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--dark); padding: 32px 24px; text-align: center;
+    }
+    .footer-links {
+      display: flex; justify-content: center; gap: 24px; list-style: none; flex-wrap: wrap;
+    }
+    .footer-links a {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(201,168,130,0.3); text-decoration: none; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--light); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
+  <a href="familiar.html" class="nav-back">← Back</a>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-content">
+    <span class="page-header-tag">Create your account</span>
+    <h1>Start logging your<br><em>cuppings today</em></h1>
+    <p class="page-header-sub">Free to join. Takes less than a minute.</p>
+  </div>
+</div>
+
+<div class="form-container">
+  <div class="form-card">
+
+    <!-- Mode tabs -->
+    <div class="mode-tabs" role="tablist">
+      <button class="mode-tab active" id="tab-pw" onclick="switchMode('password')" role="tab">Email & password</button>
+      <button class="mode-tab" id="tab-magic" onclick="switchMode('magic')" role="tab">Magic link</button>
+    </div>
+
+    <!-- Success state (shown after submit) -->
+    <div class="success-state" id="success-state">
+      <span class="success-icon">✉️</span>
+      <h2 class="success-title">Check your <em>inbox</em></h2>
+      <p class="success-body" id="success-body">We've sent a confirmation link to <strong id="success-email"></strong>. Click it to activate your account and start logging.</p>
+    </div>
+
+    <!-- Shared personal info fields — same for both modes -->
+    <div id="shared-fields">
+      <div class="form-group">
+        <label class="form-label" for="f-name">Your name</label>
+        <input type="text" id="f-name" class="form-input" placeholder="First name is fine" autocomplete="given-name" />
+        <p class="form-error" id="f-name-error">Please enter your name</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="f-company">
+          Company
+          <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;color:var(--light);margin-left:6px;text-transform:uppercase">Optional</span>
+        </label>
+        <input type="text" id="f-company" class="form-input" placeholder="Roaster, café, importer..." autocomplete="organization" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="f-occupation">
+          Occupation
+          <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;color:var(--light);margin-left:6px;text-transform:uppercase">Optional</span>
+        </label>
+        <input type="text" id="f-occupation" class="form-input" placeholder="e.g. Barista, Roaster, Home brewer..." autocomplete="job-title" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Main reason for using CupIT</label>
+        <div class="use-selector" id="use-selector">
+          <button type="button" class="use-opt" data-val="personal" onclick="selectUse(this)">
+            <span class="use-icon">🏠</span>
+            <span class="use-label">Personal</span>
+            <span class="use-desc">Cupping at home for enjoyment</span>
+          </button>
+          <button type="button" class="use-opt" data-val="commercial" onclick="selectUse(this)">
+            <span class="use-icon">☕</span>
+            <span class="use-label">Commercial</span>
+            <span class="use-desc">Professional or business use</span>
+          </button>
+        </div>
+        <p class="form-error" id="f-use-error">Please select one</p>
+      </div>
+
+      <div class="form-divider"></div>
+    </div>
+
+    <!-- Email/password form -->
+    <div id="pw-form">
+      <div class="form-group">
+        <label class="form-label" for="pw-email">Email address</label>
+        <input type="email" id="pw-email" class="form-input" placeholder="you@example.com" autocomplete="email" />
+        <p class="form-error" id="pw-email-error">Please enter a valid email address</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="pw-password">Password</label>
+        <div class="password-wrap">
+          <input type="password" id="pw-password" class="form-input" placeholder="At least 8 characters" autocomplete="new-password" oninput="checkStrength(this.value)" />
+          <button class="toggle-pw" type="button" onclick="togglePassword('pw-password', this)">Show</button>
+        </div>
+        <div class="strength-bar-wrap"><div class="strength-bar" id="strength-bar"></div></div>
+        <p class="strength-label" id="strength-label"></p>
+        <p class="form-error" id="pw-password-error">Password must be at least 8 characters</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="pw-confirm">Confirm password</label>
+        <div class="password-wrap">
+          <input type="password" id="pw-confirm" class="form-input" placeholder="Same again" autocomplete="new-password" />
+          <button class="toggle-pw" type="button" onclick="togglePassword('pw-confirm', this)">Show</button>
+        </div>
+        <p class="form-error" id="pw-confirm-error">Passwords don't match</p>
+      </div>
+
+      <button class="btn-submit" onclick="submitPassword()">Create account →</button>
+
+      <div class="or-divider"><span>or</span></div>
+
+      <p style="text-align:center;font-size:0.88rem;color:var(--mid);margin-bottom:4px">Prefer not to set a password?</p>
+      <button class="btn-submit" style="background:transparent;border:1.5px solid var(--divider);color:var(--brown);margin-top:0" onclick="switchMode('magic')">Send me a magic link instead</button>
+    </div>
+
+    <!-- Magic link form -->
+    <div id="magic-form" style="display:none">
+      <p style="font-size:0.95rem;color:var(--mid);line-height:1.7;margin-bottom:22px;font-weight:300">
+        Enter your email and we'll send you a secure link. Click it and you're straight in — no password needed, ever.
+      </p>
+      <div class="form-group">
+        <label class="form-label" for="magic-email">Email address</label>
+        <input type="email" id="magic-email" class="form-input" placeholder="you@example.com" autocomplete="email" />
+        <p class="form-error" id="magic-email-error">Please enter a valid email address</p>
+      </div>
+      <button class="btn-submit" onclick="submitMagic()">Send magic link →</button>
+
+      <div class="or-divider"><span>or</span></div>
+
+      <button class="btn-submit" style="background:transparent;border:1.5px solid var(--divider);color:var(--brown);margin-top:0" onclick="switchMode('password')">Set up a password instead</button>
+    </div>
+
+    <p class="form-terms">
+      By creating an account you agree to our
+      <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+    </p>
+
+    <p class="login-link">Already have an account? <a href="#">Log in</a></p>
+
+  </div>
+</div>
+
+<footer>
+  <ul class="footer-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="familiar.html">For cuppers</a></li>
+    <li><a href="guide.html">Beginner's guide</a></li>
+  </ul>
+</footer>
+
+<script>
+  let currentMode = 'password';
+  let selectedUse = '';
+
+  function selectUse(el) {
+    selectedUse = el.dataset.val;
+    document.querySelectorAll('.use-opt').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('f-use-error').classList.remove('show');
+  }
+
+  function validateSharedFields() {
+    let valid = true;
+    const name = document.getElementById('f-name');
+    if (!name.value.trim()) {
+      name.classList.add('error');
+      document.getElementById('f-name-error').classList.add('show');
+      valid = false;
+    } else {
+      name.classList.remove('error');
+      document.getElementById('f-name-error').classList.remove('show');
+    }
+    if (!selectedUse) {
+      document.getElementById('f-use-error').classList.add('show');
+      valid = false;
+    }
+    return valid;
+  }
+
+  function switchMode(mode) {
+    currentMode = mode;
+    document.getElementById('tab-pw').classList.toggle('active', mode === 'password');
+    document.getElementById('tab-magic').classList.toggle('active', mode === 'magic');
+    document.getElementById('pw-form').style.display    = mode === 'password' ? 'block' : 'none';
+    document.getElementById('magic-form').style.display = mode === 'magic'    ? 'block' : 'none';
+  }
+
+  function togglePassword(id, btn) {
+    const input = document.getElementById(id);
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? 'Hide' : 'Show';
+  }
+
+  function checkStrength(pw) {
+    const bar   = document.getElementById('strength-bar');
+    const label = document.getElementById('strength-label');
+    let score = 0;
+    if (pw.length >= 8)  score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+    const levels = [
+      { w: '20%', bg: '#c0392b', t: 'Too weak' },
+      { w: '40%', bg: '#e67e22', t: 'Weak' },
+      { w: '60%', bg: '#f1c40f', t: 'Fair' },
+      { w: '80%', bg: '#8ec98e', t: 'Good' },
+      { w: '100%',bg: '#4a6741', t: 'Strong' },
+    ];
+    const l = levels[Math.min(score, 4)];
+    bar.style.width = pw.length ? l.w : '0%';
+    bar.style.background = l.bg;
+    label.textContent = pw.length ? l.t : '';
+    label.style.color = l.bg;
+  }
+
+  function validateEmail(val) {
+    return val.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+  }
+
+  function submitPassword() {
+    if (!validateSharedFields()) return;
+    let valid = true;
+
+    const email = document.getElementById('pw-email');
+    const pw    = document.getElementById('pw-password');
+    const conf  = document.getElementById('pw-confirm');
+
+    // Email
+    if (!validateEmail(email.value)) {
+      email.classList.add('error');
+      document.getElementById('pw-email-error').classList.add('show');
+      valid = false;
+    } else {
+      email.classList.remove('error');
+      document.getElementById('pw-email-error').classList.remove('show');
+    }
+
+    // Password
+    if (pw.value.length < 8) {
+      pw.classList.add('error');
+      document.getElementById('pw-password-error').classList.add('show');
+      valid = false;
+    } else {
+      pw.classList.remove('error');
+      document.getElementById('pw-password-error').classList.remove('show');
+    }
+
+    // Confirm
+    if (pw.value !== conf.value || !conf.value) {
+      conf.classList.add('error');
+      document.getElementById('pw-confirm-error').classList.add('show');
+      valid = false;
+    } else {
+      conf.classList.remove('error');
+      document.getElementById('pw-confirm-error').classList.remove('show');
+    }
+
+    if (!valid) return;
+
+    showSuccess(email.value.trim(), 'password');
+  }
+
+  function submitMagic() {
+    if (!validateSharedFields()) return;
+    const email = document.getElementById('magic-email');
+    if (!validateEmail(email.value)) {
+      email.classList.add('error');
+      document.getElementById('magic-email-error').classList.add('show');
+      return;
+    }
+    email.classList.remove('error');
+    document.getElementById('magic-email-error').classList.remove('show');
+    showSuccess(email.value.trim(), 'magic');
+  }
+
+  function showSuccess(email, mode) {
+    document.getElementById('pw-form').style.display = 'none';
+    document.getElementById('magic-form').style.display = 'none';
+    document.getElementById('shared-fields').style.display = 'none';
+    document.querySelector('.mode-tabs').style.display = 'none';
+    document.querySelector('.form-terms').style.display = 'none';
+    document.querySelector('.login-link').style.display = 'none';
+
+    document.getElementById('success-email').textContent = email;
+    if (mode === 'magic') {
+      document.getElementById('success-body').innerHTML =
+        `We've sent a magic link to <strong>${email}</strong>. Click it and you'll be straight into your account — no password needed.`;
+    }
+    document.getElementById('success-state').style.display = 'block';
+  }
+</script>
+</body>
+</html>

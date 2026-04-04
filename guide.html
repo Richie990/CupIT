@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Beginner's Cupping Guide  (guide.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    A fully self-contained, interactive cupping walkthrough aimed
+    at complete beginners. No account required. Reached from the
+    homepage "New to cupping" button.
+
+  USER FLOW:
+    INTRO VIEW     → Explains what cupping is, lists what you need,
+                     "Begin Walkthrough" button launches the steps.
+    WALKTHROUGH    → 8 guided steps (step 1 = naming the session,
+                     steps 2–7 = the cupping process, step 8 = the
+                     flavour picker). One step fills the screen at a
+                     time. ← back and → next buttons at the bottom.
+    FLAVOUR STEP   → Built-in SCA-inspired flavour wheel rendered
+                     inside the walkthrough card. 3-level drill-down:
+                     Family → Group → Specific. Max 4 picks.
+                     "Just Fruity" style escape tile at each level.
+    COMPLETION     → Shows picked flavours, screenshot nudge,
+                     bookmark instructions (platform-detected).
+
+  KEY JAVASCRIPT:
+    STEPS[]          Array of step objects defining content, photos,
+                     timers etc. Add/edit steps here.
+    FF_WHEEL[]       Flavour wheel data — families, groups, specifics.
+    renderNameStep() Renders step 1 (session naming input).
+    renderStep()     Renders any of the 7 cupping steps from STEPS[].
+    showFlavourStep()Renders the flavour picker as the final step.
+    finishCupping()  Handles the completion screen and name display.
+    tryBookmark()    Detects platform (iOS/Android/desktop) and shows
+                     tailored bookmark instructions.
+
+  STEP PHOTOS:
+    Each step has a photo slot. Currently shows a placeholder.
+    To add a real photo, find the comment above the <div class="wt-photo">
+    in each step object and set the src, e.g.:
+      photo: 'images/step1-grind.jpg'
+
+  DESIGN NOTES:
+    - Warm paper-and-brown palette matching the homepage.
+    - Progress dots + bar track all 9 steps (name + 7 + flavour).
+    - Timer on step 4 (steep) — start/pause/resume, draining fill bar.
+    - Flavour picker resets to family level after each pick so the
+      user can naturally explore multiple flavour paths.
+
+  FUTURE / TODO:
+    - Wire "Cup another coffee →" to save session data once backend
+      is built — currently just resets the UI.
+    - Add real step photos once photography is done.
+    - Consider linking completion screen to cupping.html for users
+      who want to do a more detailed logged session next time.
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#faf6ee" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <style>
+    .site-nav {
+      position: sticky; top: 0; z-index: 200;
+      background: rgba(250,246,238,0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(92,51,23,0.1);
+      padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .site-nav-logo {
+      font-family: 'Lora', serif; font-size: 1rem; font-weight: 600;
+      color: #5c3317; text-decoration: none;
+    }
+    .site-nav-logo em { font-style: italic; color: #b85c2b; }
+    .site-nav-back {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: #9b6b47; text-decoration: none; transition: color 0.2s;
+    }
+    .site-nav-back:hover { color: #5c3317; }
+  </style>
+  <title>Your First Cupping — CupIT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:      #faf6ee;
+      --paper:   #fff9f0;
+      --ink:     #2c1a0e;
+      --brown:   #5c3317;
+      --mid:     #9b6b47;
+      --light:   #c9a882;
+      --accent:  #b85c2b;
+      --green:   #4a6741;
+      --steam:   #e8ddd0;
+      --divider: rgba(92,51,23,0.12);
+      --r:       16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.4;
+    }
+
+    /* ════════ INTRO ════════ */
+    #intro-view { display: block; }
+    #walkthrough-view { display: none; }
+
+    .hero {
+      background: var(--brown); color: var(--paper);
+      padding: 52px 24px 44px; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 110%, rgba(184,92,43,0.5) 0%, transparent 70%);
+    }
+    .hero-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--light); margin-bottom: 16px; position: relative;
+    }
+    .hero h1 {
+      font-family: 'Lora', serif; font-size: clamp(2rem,7vw,2.8rem);
+      font-weight: 600; line-height: 1.2; margin-bottom: 16px; position: relative;
+    }
+    .hero-sub {
+      font-size: 1rem; color: rgba(250,246,238,0.75);
+      max-width: 360px; margin: 0 auto; line-height: 1.65; position: relative;
+    }
+    .hero-cup {
+      font-size: 4rem; margin-bottom: 20px; display: block;
+      position: relative; animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-6px); }
+    }
+
+    .section { padding: 40px 20px; max-width: 540px; margin: 0 auto; }
+    .section + .section { padding-top: 0; }
+    .section-eyebrow {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 8px;
+    }
+    .section-title {
+      font-family: 'Lora', serif; font-size: 1.55rem;
+      font-weight: 600; color: var(--brown); margin-bottom: 18px; line-height: 1.3;
+    }
+
+    .needs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .need-card {
+      background: var(--paper); border: 1px solid var(--divider);
+      border-radius: var(--r); padding: 16px 14px;
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .need-icon { font-size: 1.6rem; flex-shrink: 0; margin-top: 2px; }
+    .need-name { font-weight: 500; font-size: 0.88rem; color: var(--brown); line-height: 1.3; }
+    .need-note { font-size: 0.76rem; color: var(--mid); margin-top: 3px; line-height: 1.4; }
+    .need-optional {
+      font-family: 'DM Mono', monospace; font-size: 0.55rem;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--light); margin-top: 4px;
+    }
+
+    .tip-banner {
+      background: linear-gradient(135deg, #f0ebe3, #e8e0d4);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--r) var(--r) 0;
+      padding: 14px 18px; margin: 24px 0;
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .tip-banner .tip-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+    .tip-banner p { font-size: 0.88rem; color: var(--brown); line-height: 1.6; }
+    .tip-banner strong { font-weight: 500; color: var(--accent); }
+
+    .cta-section { padding: 40px 20px 60px; text-align: center; max-width: 540px; margin: 0 auto; }
+    .cta-title { font-family: 'Lora', serif; font-size: 1.5rem; color: var(--brown); margin-bottom: 10px; }
+    .cta-sub { font-size: 0.9rem; color: var(--mid); margin-bottom: 28px; line-height: 1.6; }
+
+    .btn-start {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--brown); color: var(--paper);
+      font-weight: 500; font-size: 0.95rem;
+      padding: 16px 36px; border-radius: 50px; border: none;
+      cursor: pointer; transition: all 0.2s;
+      box-shadow: 0 4px 20px rgba(92,51,23,0.25);
+    }
+    .btn-start:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(92,51,23,0.3); }
+
+    .btn-ghost {
+      display: block; width: 100%;
+      padding: 13px; border-radius: 50px;
+      background: transparent;
+      border: 1.5px solid var(--divider);
+      color: var(--mid); font-weight: 500; font-size: 0.88rem;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-ghost:hover { border-color: var(--brown); color: var(--brown); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .hero > * { animation: fadeUp 0.6s ease both; }
+    .hero-cup { animation-delay: 0s; }
+    .hero-tag { animation-delay: 0.1s; }
+    .hero h1  { animation-delay: 0.2s; }
+    .hero-sub { animation-delay: 0.3s; }
+
+    /* ════════ WALKTHROUGH ════════ */
+
+    #walkthrough-view {
+      min-height: 100vh;
+      flex-direction: column;
+    }
+
+    .wt-topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--brown);
+      padding: 14px 20px 0;
+    }
+    .wt-topbar-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .wt-exit {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(250,246,238,0.5); cursor: pointer;
+      background: none; border: none; padding: 4px 0; transition: color 0.2s;
+    }
+    .wt-exit:hover { color: var(--light); }
+    .wt-step-label {
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(250,246,238,0.6);
+    }
+    .wt-step-label span { color: var(--light); }
+
+    .wt-progress-track {
+      height: 3px; background: rgba(255,255,255,0.15); border-radius: 2px;
+    }
+    .wt-progress-fill {
+      height: 100%; background: var(--light);
+      border-radius: 2px; transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    .wt-dots {
+      display: flex; justify-content: center; gap: 6px;
+      padding: 10px 20px 14px; background: var(--brown);
+    }
+    .wt-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: rgba(255,255,255,0.2); transition: all 0.3s; flex-shrink: 0;
+    }
+    .wt-dot.done    { background: rgba(255,255,255,0.45); }
+    .wt-dot.current { background: var(--light); width: 18px; border-radius: 3px; }
+
+    .wt-body {
+      flex: 1; overflow-y: auto;
+      padding: 28px 20px 120px;
+      max-width: 540px; width: 100%; margin: 0 auto;
+    }
+
+    .wt-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 20px;
+      padding: 24px 20px;
+      animation: cardIn 0.35s ease both;
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .wt-emoji { font-size: 2.6rem; display: block; margin-bottom: 14px; }
+    .wt-heading {
+      font-family: 'Lora', serif; font-size: 1.45rem;
+      font-weight: 600; color: var(--brown); margin-bottom: 12px; line-height: 1.25;
+    }
+    .wt-text { font-size: 0.95rem; color: #5a4030; line-height: 1.75; }
+    .wt-detail {
+      margin-top: 16px; background: var(--steam);
+      border-radius: 12px; padding: 14px 16px;
+      font-size: 0.85rem; color: var(--mid); line-height: 1.65;
+    }
+    .wt-detail strong { color: var(--brown); font-weight: 500; }
+    .wt-time-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 16px; background: rgba(184,92,43,0.1); color: var(--accent);
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      letter-spacing: 0.08em; padding: 6px 12px; border-radius: 20px;
+    }
+
+    /* Photo */
+    .wt-photo {
+      margin-top: 18px; border-radius: 14px; overflow: hidden; background: var(--steam);
+    }
+    .wt-photo img { width: 100%; max-height: 220px; object-fit: cover; display: block; }
+    .wt-photo-placeholder {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px; height: 130px; color: var(--light);
+    }
+    .wt-photo-placeholder .ph-icon { font-size: 1.8rem; opacity: 0.35; }
+    .wt-photo-placeholder span {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.45;
+    }
+
+    /* Timer */
+    .wt-timer {
+      margin-top: 20px; background: var(--brown);
+      border-radius: 16px; padding: 20px; text-align: center; color: var(--paper);
+    }
+    .wt-timer-label {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--light); margin-bottom: 10px;
+    }
+    .wt-timer-display {
+      font-family: 'DM Mono', monospace; font-size: 3rem;
+      letter-spacing: 0.05em; color: var(--paper); line-height: 1; margin-bottom: 16px;
+      transition: color 0.4s;
+    }
+    .wt-timer-display.done { color: #8ec98e; }
+    .wt-timer-track {
+      height: 4px; background: rgba(255,255,255,0.15);
+      border-radius: 2px; margin-bottom: 16px;
+    }
+    .wt-timer-fill {
+      height: 100%; background: var(--light);
+      border-radius: 2px; transition: width 1s linear; width: 100%;
+    }
+    .wt-timer-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,0.12); color: var(--paper);
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 30px;
+      padding: 9px 18px; cursor: pointer; transition: background 0.2s;
+    }
+    .wt-timer-btn:hover { background: rgba(255,255,255,0.2); }
+
+    /* Bottom actions */
+    .wt-actions {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 14px 20px 28px;
+      background: linear-gradient(to top, var(--bg) 65%, transparent);
+      display: flex; gap: 10px;
+    }
+    .wt-actions-inner {
+      display: flex; gap: 10px; width: 100%;
+      max-width: 540px; margin: 0 auto;
+    }
+    .btn-back {
+      width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+      background: var(--paper); border: 1px solid var(--divider);
+      color: var(--mid); font-size: 1.1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+    }
+    .btn-back:hover { border-color: var(--brown); color: var(--brown); }
+    .btn-back:disabled { opacity: 0.3; pointer-events: none; }
+    .btn-next {
+      flex: 1; height: 52px; border-radius: 14px;
+      background: var(--brown); color: var(--paper);
+      font-family: 'DM Mono', monospace; font-size: 0.72rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border: none; cursor: pointer; transition: background 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-next:hover { background: var(--accent); }
+    .btn-next.finish { background: var(--green); }
+    .btn-next.finish:hover { background: #3a5632; }
+
+    /* Result tags on complete screen */
+    .result-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; justify-content: center; }
+    .result-tag {
+      background: var(--brown); color: var(--paper);
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 7px 14px; border-radius: 20px;
+      animation: tagPop 0.25s ease both;
+    }
+    @keyframes tagPop {
+      from { opacity: 0; transform: scale(0.8); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .result-note { font-size: 0.88rem; color: var(--mid); line-height: 1.7; text-align: center; }
+
+    /* Flavour step inside walkthrough card */
+    .wt-flavour-back {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--mid); background: none; border: none;
+      cursor: pointer; padding: 8px 0; margin-bottom: 8px;
+      transition: color 0.2s;
+    }
+    .wt-flavour-back:hover { color: var(--accent); }
+
+    /* "Just Fruity" tile — sits at top of submenus */
+    .wt-ftile.wt-ftile-just {
+      border-style: dashed;
+      color: var(--mid);
+    }
+    .wt-ftile.wt-ftile-just .wt-ftile-name { color: var(--mid); font-style: italic; }
+    .wt-ftile.wt-ftile-just:hover { border-color: var(--accent); }
+    .wt-ftile.wt-ftile-just.selected { border-style: solid; border-color: var(--accent); background: rgba(184,92,43,0.06); }
+    .wt-ftile.wt-ftile-just.selected .wt-ftile-name { color: var(--accent); font-style: normal; }
+
+    .wt-flavour-tiles {
+      display: flex; flex-direction: column; gap: 9px;
+      margin-bottom: 16px;
+    }
+    .wt-flavour-tiles.wide {
+      display: flex; flex-direction: column;
+    }
+    .wt-ftile {
+      background: var(--bg); border: 1.5px solid var(--divider);
+      border-radius: 12px; padding: 13px 12px;
+      cursor: pointer; transition: all 0.18s;
+      display: flex; flex-direction: column; gap: 4px;
+      position: relative; -webkit-tap-highlight-color: transparent;
+    }
+    .wt-ftile:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .wt-ftile:active { transform: scale(0.97); }
+    .wt-ftile.selected { border-color: var(--accent); background: rgba(184,92,43,0.06); }
+    .wt-ftile.selected::after {
+      content: '✓'; position: absolute; top: 8px; right: 10px;
+      font-size: 0.65rem; color: var(--accent); font-family: 'DM Mono', monospace;
+    }
+    .wt-ftile.disabled { opacity: 0.35; pointer-events: none; }
+    .wt-ftile.has-pick { border-color: rgba(184,92,43,0.3); background: rgba(184,92,43,0.04); }
+    .wt-ftile.has-pick::after { content: '✓'; position: absolute; top: 8px; right: 10px; font-size: 0.65rem; color: var(--accent); font-family: 'DM Mono', monospace; }
+    .wt-ftile-emoji { font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
+    .wt-ftile-name { font-weight: 500; font-size: 0.85rem; color: var(--brown); line-height: 1.2; }
+    .wt-ftile-hint { font-size: 0.68rem; color: var(--mid); line-height: 1.3; }
+
+    .wt-flavour-counter {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 10px;
+    }
+    .wt-flavour-counter span { color: var(--accent); font-weight: bold; }
+
+    .wt-flavour-picks {
+      display: flex; flex-wrap: wrap; gap: 7px; min-height: 32px; margin-bottom: 4px;
+    }
+    .wt-fpick {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--brown); color: var(--paper);
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 5px 8px 5px 11px; border-radius: 20px;
+      animation: tagPop 0.2s ease both;
+    }
+    .wt-fpick-remove {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: rgba(255,255,255,0.2); border: none;
+      color: var(--paper); cursor: pointer; font-size: 0.5rem;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+    }
+    .wt-fpick-remove:hover { background: rgba(255,255,255,0.4); }
+
+    /* Name step */
+    .wt-name-input-wrap { margin-top: 20px; }
+    .wt-name-input {
+      width: 100%; padding: 14px 16px;
+      background: var(--bg);
+      border: 1.5px solid var(--divider);
+      border-radius: 12px;
+      font-family: 'Lora', serif; font-size: 1rem;
+      color: var(--brown); outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .wt-name-input:focus { border-color: var(--accent); }
+    .wt-name-input::placeholder { color: var(--light); font-style: italic; }
+
+    /* Complete screen */
+    .wt-complete {
+      display: none; text-align: center;
+      padding: 40px 4px 100px;
+      animation: cardIn 0.4s ease both;
+    }
+    .wt-complete.active { display: block; }
+    .complete-icon { font-size: 4rem; margin-bottom: 20px; display: block; }
+    .complete-title {
+      font-family: 'Lora', serif; font-size: 1.8rem;
+      color: var(--brown); margin-bottom: 12px; line-height: 1.3;
+    }
+    .complete-text { font-size: 0.95rem; color: var(--mid); line-height: 1.75; margin-bottom: 28px; }
+
+    .complete-hint-card {
+      display: flex; align-items: flex-start; gap: 14px;
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: var(--r);
+      padding: 16px; margin-top: 14px;
+      text-align: left;
+    }
+    .hint-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 2px; }
+    .hint-title {
+      font-family: 'Lora', serif; font-size: 0.95rem;
+      font-weight: 600; color: var(--brown); margin-bottom: 4px;
+    }
+    .hint-body { font-size: 0.82rem; color: var(--mid); line-height: 1.55; }
+    .hint-action-btn {
+      display: inline-block; margin-top: 10px;
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--accent); background: none; border: none;
+      cursor: pointer; padding: 0; transition: opacity 0.2s;
+    }
+    .hint-action-btn:hover { opacity: 0.7; }
+
+    .bookmark-steps {
+      background: var(--steam); border-radius: var(--r);
+      padding: 16px 18px; margin-top: 10px; text-align: left;
+    }
+    .bookmark-steps-title {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px;
+    }
+    .bookmark-step-list {
+      list-style: none; padding: 0;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .bookmark-step-list li {
+      display: flex; gap: 10px; align-items: flex-start;
+      font-size: 0.85rem; color: var(--brown); line-height: 1.5;
+    }
+    .bookmark-step-list li .step-num {
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      color: var(--accent); flex-shrink: 0; margin-top: 2px;
+    }
+
+  </style>
+</head>
+<body>
+
+<!-- ── Site nav ── -->
+<nav class="site-nav">
+  <a href="index.html" class="site-nav-logo">Cup<em>IT</em></a>
+  <a href="index.html" class="site-nav-back">← Back to home</a>
+</nav>
+
+<!-- ════════ INTRO VIEW ════════ -->
+<div id="intro-view">
+  <div class="hero">
+    <span class="hero-cup">☕</span>
+    <p class="hero-tag">CupIT · Beginner's Guide</p>
+    <h1>Your First<br><em>Coffee Cupping</em></h1>
+    <p class="hero-sub">No fancy equipment, no experience needed. Just coffee, hot water, and your senses.</p>
+  </div>
+
+  <div class="section">
+    <p class="section-eyebrow">What is cupping?</p>
+    <p class="section-title">Tasting coffee the simple way</p>
+    <p style="font-size:0.95rem;color:#5a4030;line-height:1.75;margin-bottom:16px">Cupping is just a simple, consistent way to taste and think about coffee. You brew it directly in a cup — no filters, no machines — and slurp it off a spoon. That's really it.</p>
+    <p style="font-size:0.95rem;color:#5a4030;line-height:1.75">Coffee professionals use it to compare batches side by side, but at home it's a lovely way to slow down and really <em>notice</em> what you're drinking — the smell, the flavour, the way it feels in your mouth.</p>
+    <div class="tip-banner" style="margin-top:24px">
+      <span class="tip-icon">🌟</span>
+      <p>There are <strong>no right answers</strong>. Everyone's palate is different. If it tastes like chocolate to you, it tastes like chocolate. Trust yourself.</p>
+    </div>
+  </div>
+
+  <div class="section" style="padding-top:0">
+    <p class="section-eyebrow">Before you start</p>
+    <p class="section-title">What you'll need</p>
+    <div class="needs-grid">
+      <div class="need-card"><span class="need-icon">🫘</span><div><p class="need-name">Fresh Coffee</p><p class="need-note">Freshly ground is best. About 10–12g per cup.</p></div></div>
+      <div class="need-card"><span class="need-icon">🫙</span><div><p class="need-name">A Cup or Bowl</p><p class="need-note">Any mug or bowl works. A cereal bowl is perfect.</p></div></div>
+      <div class="need-card"><span class="need-icon">🫖</span><div><p class="need-name">Hot Water</p><p class="need-note">Just off the boil — around 90–95°C.</p></div></div>
+      <div class="need-card"><span class="need-icon">🥄</span><div><p class="need-name">A Spoon</p><p class="need-note">For breaking the crust and tasting.</p></div></div>
+      <div class="need-card"><span class="need-icon">⏱</span><div><p class="need-name">A Timer</p><p class="need-note">Your phone's timer works perfectly.</p></div></div>
+      <div class="need-card"><span class="need-icon">📝</span><div><p class="need-name">Something to Write</p><p class="need-note">To jot notes as you taste.</p><p class="need-optional">optional</p></div></div>
+    </div>
+    <div class="tip-banner" style="margin-top:20px">
+      <span class="tip-icon">⚖️</span>
+      <p>Aim for roughly <strong>1 heaped tablespoon of grounds per cup</strong> of water. You don't need scales — close enough is fine.</p>
+    </div>
+  </div>
+
+  <div class="cta-section">
+    <p class="cta-title">Ready to begin?</p>
+    <p class="cta-sub">We'll walk you through each step one at a time. Take it at your own pace.</p>
+    <button class="btn-start" onclick="startWalkthrough()">Begin Walkthrough →</button>
+  </div>
+</div>
+
+
+<!-- ════════ WALKTHROUGH VIEW ════════ -->
+<div id="walkthrough-view">
+
+  <div class="wt-topbar">
+    <div class="wt-topbar-row">
+      <button class="wt-exit" onclick="exitWalkthrough()">← Exit</button>
+      <span class="wt-step-label">Step <span id="wt-current-num">1</span> of 9</span>
+      <span style="width:48px"></span>
+    </div>
+    <div class="wt-progress-track">
+      <div class="wt-progress-fill" id="wt-progress"></div>
+    </div>
+  </div>
+
+  <div class="wt-dots" id="wt-dots"></div>
+
+  <div class="wt-body">
+    <div id="wt-card-container"></div>
+    <div class="wt-complete" id="wt-complete">
+      <span class="complete-icon">🎉</span>
+      <h2 class="complete-title">Your first cupping, done.</h2>
+      <p class="complete-text">Here's what you picked up in that cup. Every coffee is different — and so is every taster.</p>
+      <div class="result-tags" id="wt-result-tags"></div>
+      <p class="result-note" id="wt-result-note"></p>
+
+      <!-- Screenshot nudge -->
+      <div class="complete-hint-card" id="screenshot-hint">
+        <span class="hint-icon">📸</span>
+        <div>
+          <p class="hint-title">Save your notes</p>
+          <p class="hint-body">Take a screenshot now so you don't lose your flavour picks. Your phone's screenshot button is the quickest way.</p>
+        </div>
+      </div>
+
+      <!-- Bookmark section -->
+      <div class="complete-hint-card" id="bookmark-hint">
+        <span class="hint-icon">🔖</span>
+        <div>
+          <p class="hint-title">Come back any time</p>
+          <p class="hint-body" id="bookmark-instructions">Bookmark this page and it'll always open from the beginning, ready for your next coffee. No account needed — ever.</p>
+          <button class="hint-action-btn" onclick="tryBookmark()">Show me how →</button>
+        </div>
+      </div>
+
+      <!-- Bookmark instructions panel (shown after tapping) -->
+      <div class="bookmark-steps" id="bookmark-steps" style="display:none">
+        <p class="bookmark-steps-title" id="bookmark-platform-title"></p>
+        <ol class="bookmark-step-list" id="bookmark-step-list"></ol>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:24px">
+        <button class="btn-start" style="width:100%;justify-content:center" onclick="restartWalkthrough()">Cup another coffee →</button>
+        <a href="index.html" class="btn-ghost" style="text-align:center;text-decoration:none;display:block;padding:13px">← Back to home</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="wt-actions" id="wt-actions">
+    <div class="wt-actions-inner">
+      <button class="btn-back" id="btn-back" onclick="prevStep()" disabled>←</button>
+      <button class="btn-next" id="btn-next" onclick="nextStep()">I've done this →</button>
+    </div>
+  </div>
+
+</div>
+
+
+<script>
+  const STEPS = [
+    {
+      emoji: '🫘',
+      heading: 'Grind your coffee',
+      text: 'Grind your coffee medium-coarse — roughly the texture of sea salt or coarse sugar. Too fine and it\'ll be muddy; too coarse and it\'ll taste weak.',
+      detail: '<strong>No grinder?</strong> Pre-ground filter coffee works fine for your first cupping. Just aim for something that isn\'t espresso-fine.',
+      photo: '', // PHOTO: e.g. 'images/step1-grind.jpg'
+      photoAlt: 'Grinding coffee to medium-coarse',
+    },
+    {
+      emoji: '👃',
+      heading: 'Smell the dry grounds',
+      text: 'Before adding any water, take a good sniff of the dry coffee in the cup. Close your eyes if it helps. What does it remind you of? Fruit? Chocolate? Toast? Wood?',
+      detail: 'This is called the <strong>dry fragrance</strong>. Coffee smells are often strongest before water is added, so take your time here.',
+      photo: '', // PHOTO: e.g. 'images/step2-smell.jpg'
+      photoAlt: 'Smelling dry coffee grounds',
+    },
+    {
+      emoji: '🫖',
+      heading: 'Pour the hot water',
+      text: 'Your water needs to be very hot — bring it to a full boil, then let it sit for 30 seconds. You\'re aiming for <strong>90–95°C</strong>. Too cool and the coffee won\'t extract properly; too far off the boil and you\'ll scald it.',
+      detail: 'Pour slowly and evenly over all the grounds until the cup is roughly ⅔ full (about 150ml). <strong>Do not stir.</strong> Just let the water do the work — the grounds will saturate on their own. Then leave it completely alone.',
+      timeBadge: '⏱ Start your timer now',
+      photo: '', // PHOTO: e.g. 'images/step3-pour.jpg'
+      photoAlt: 'Pouring hot water over grounds',
+    },
+    {
+      emoji: '⏳',
+      heading: 'Wait 4 minutes',
+      text: 'Resist the urge to stir or touch it. A crust of coffee grounds will form on the surface — that\'s exactly what\'s supposed to happen.',
+      detail: 'While you wait, notice how the aroma changes as it steeps. The warm steam carries a whole new wave of smells.',
+      hasTimer: true,
+      timerSeconds: 240,
+      photo: '', // PHOTO: e.g. 'images/step4-crust.jpg'
+      photoAlt: 'Coffee crust forming during steep',
+    },
+    {
+      emoji: '💨',
+      heading: 'Break the crust',
+      text: 'Take your spoon and gently push the floating crust of grounds to one side, breaking it open. Lean in and inhale — this burst of aroma is one of the best moments in cupping.',
+      detail: 'This is the <strong>wet aroma</strong>. Notice how different it is to the dry fragrance from Step 2?',
+      photo: '', // PHOTO: e.g. 'images/step5-break.jpg'
+      photoAlt: 'Breaking the coffee crust with a spoon',
+    },
+    {
+      emoji: '🥄',
+      heading: 'Scoop the surface',
+      text: 'Use your spoon to scoop away any remaining crust — the leftover grounds and foam sitting on top. Have a small bowl or saucer nearby to dump them into as you go.',
+      detail: 'Don\'t stress about being perfect here. A few stray grounds left in the cup is absolutely fine — it\'s more of a tidy-up than a precise step.',
+      timeBadge: '⏱ Wait until ~70°C — about 8–10 min total',
+      photo: '', // PHOTO: e.g. 'images/step6-scoop.jpg'
+      photoAlt: 'Scooping remaining grounds from the surface',
+    },
+    {
+      emoji: '😋',
+      heading: 'Slurp and taste',
+      text: 'Scoop a spoonful of coffee and slurp it loudly off the spoon. Yes, really — the slurp sprays the coffee across your whole palate and mixes it with air, which opens up the flavours dramatically.',
+      detail: '<strong>Don\'t be shy about the noise!</strong> Even professional tasters slurp loudly. The goal is to coat your entire mouth, not sip politely.',
+      photo: '', // PHOTO: e.g. 'images/step7-slurp.jpg'
+      photoAlt: 'Slurping coffee from a cupping spoon',
+    },
+  ];
+
+  const TOTAL = STEPS.length;
+  let current = 0;
+  let timerInterval = null;
+  let timerRemaining = 0;
+  let timerRunning = false;
+
+  function buildDots() {
+    const c = document.getElementById('wt-dots');
+    // 1 dot for name step + 1 per regular step + 1 for flavour step = TOTAL + 2
+    const total = STEPS.length + 2;
+    c.innerHTML = Array.from({ length: total }, (_, i) =>
+      `<div class="wt-dot" id="dot-${i}"></div>`
+    ).join('');
+  }
+
+  function updateProgress() {
+    // current is 0-indexed into STEPS; name step = dot 0, steps = dots 1–7, flavour = dot 8
+    const dotIndex = current + 1;
+    document.getElementById('wt-current-num').textContent = current + 2; // step 2–9
+    document.getElementById('wt-progress').style.width = (((current + 1) / (STEPS.length + 2)) * 100) + '%';
+    const totalDots = STEPS.length + 2;
+    for (let i = 0; i < totalDots; i++) {
+      const d = document.getElementById('dot-' + i);
+      if (!d) continue;
+      d.className = 'wt-dot' + (i < dotIndex ? ' done' : i === dotIndex ? ' current' : '');
+    }
+    document.getElementById('btn-back').disabled = false; // always enabled — prevStep handles the name step
+    const btn = document.getElementById('btn-next');
+    if (current === TOTAL - 1) {
+      btn.textContent = 'Next →';
+      btn.className = 'btn-next';
+      btn.onclick = nextStep;
+    } else {
+      btn.textContent = "I've done this →";
+      btn.className = 'btn-next';
+      btn.onclick = nextStep;
+    }
+  }
+
+  function renderStep() {
+    clearTimer();
+    const s = STEPS[current];
+    document.getElementById('wt-complete').classList.remove('active');
+    document.getElementById('wt-actions').style.display = 'flex';
+
+    const photoHTML = `<div class="wt-photo">${
+      s.photo
+        ? `<img src="${s.photo}" alt="${s.photoAlt}" onerror="this.parentElement.innerHTML='<div class=\'wt-photo-placeholder\'><span class=\'ph-icon\'>📷</span><span>Photo coming soon</span></div>'" />`
+        : `<div class="wt-photo-placeholder"><span class="ph-icon">📷</span><span>Photo coming soon</span></div>`
+    }</div>`;
+
+    const timerHTML = s.hasTimer ? `
+      <div class="wt-timer">
+        <div class="wt-timer-label">Steep timer</div>
+        <div class="wt-timer-display" id="timer-display">4:00</div>
+        <div class="wt-timer-track"><div class="wt-timer-fill" id="timer-fill"></div></div>
+        <button class="wt-timer-btn" id="timer-btn" onclick="toggleTimer()">▶ Start timer</button>
+      </div>` : '';
+
+    const badgeHTML = s.timeBadge ? `<span class="wt-time-badge">${s.timeBadge}</span>` : '';
+
+    document.getElementById('wt-card-container').innerHTML = `
+      <div class="wt-card">
+        <span class="wt-emoji">${s.emoji}</span>
+        <h2 class="wt-heading">${s.heading}</h2>
+        <p class="wt-text">${s.text}</p>
+        ${s.detail ? `<div class="wt-detail">${s.detail}</div>` : ''}
+        ${badgeHTML}
+        ${timerHTML}
+        ${photoHTML}
+      </div>`;
+
+    updateProgress();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (s.hasTimer) initTimer(s.timerSeconds);
+  }
+
+  function initTimer(secs) {
+    timerRemaining = secs;
+    timerRunning = false;
+    updateTimerDisplay();
+  }
+
+  function toggleTimer() {
+    if (timerRunning) {
+      clearInterval(timerInterval);
+      timerRunning = false;
+      document.getElementById('timer-btn').textContent = '▶ Resume timer';
+    } else {
+      timerRunning = true;
+      document.getElementById('timer-btn').textContent = '⏸ Pause';
+      timerInterval = setInterval(() => {
+        timerRemaining--;
+        updateTimerDisplay();
+        if (timerRemaining <= 0) {
+          clearInterval(timerInterval);
+          timerRunning = false;
+          document.getElementById('timer-display').classList.add('done');
+          document.getElementById('timer-display').textContent = 'Done! ✓';
+          document.getElementById('timer-btn').textContent = "Time's up — move on";
+          document.getElementById('timer-fill').style.width = '0%';
+        }
+      }, 1000);
+    }
+  }
+
+  function updateTimerDisplay() {
+    const m = Math.floor(timerRemaining / 60);
+    const s = timerRemaining % 60;
+    const el = document.getElementById('timer-display');
+    const fill = document.getElementById('timer-fill');
+    if (el) el.textContent = `${m}:${String(s).padStart(2,'0')}`;
+    if (fill) fill.style.width = (timerRemaining / STEPS[current].timerSeconds * 100) + '%';
+  }
+
+  function clearTimer() {
+    clearInterval(timerInterval);
+    timerRunning = false;
+  }
+
+  function nextStep() {
+    clearTimer();
+    if (onNameStep) {
+      const inp = document.getElementById('cupping-name-input');
+      if (inp) cuppingName = inp.value.trim();
+      onNameStep = false;
+      current = 0;
+      renderStep();
+      return;
+    }
+    if (current < TOTAL - 1) { current++; renderStep(); }
+    else showFlavourStep();
+  }
+
+  function prevStep() {
+    clearTimer();
+    if (flavourStepActive) {
+      flavourStepActive = false;
+      current = TOTAL - 1;
+      renderStep();
+      document.getElementById('wt-actions').style.display = 'flex';
+    } else if (current > 0) {
+      current--;
+      renderStep();
+    } else {
+      renderNameStep();
+    }
+  }
+
+  // ── Flavour step state ──
+  let cuppingName = '';
+  let onNameStep = false;
+
+  function renderNameStep() {
+    onNameStep = true;
+    document.getElementById('wt-complete').classList.remove('active');
+    document.getElementById('wt-actions').style.display = 'flex';
+    document.getElementById('wt-current-num').textContent = '1';
+    document.getElementById('wt-progress').style.width = '0%';
+
+    // Dots — first dot active, rest inactive
+    document.querySelectorAll('.wt-dot').forEach((d, i) => {
+      d.className = 'wt-dot' + (i === 0 ? ' current' : '');
+    });
+
+    document.getElementById('btn-back').disabled = true;
+    const btn = document.getElementById('btn-next');
+    btn.textContent = "Let's go →";
+    btn.className = 'btn-next';
+    btn.onclick = nextStep;
+
+    document.getElementById('wt-card-container').innerHTML = `
+      <div class="wt-card">
+        <span class="wt-emoji">✏️</span>
+        <h2 class="wt-heading">What shall we call this cupping?</h2>
+        <p class="wt-text">Give this cupping a name — anything you like. It could be the coffee name, where you got it, or just a feeling.</p>
+        <div class="wt-name-input-wrap">
+          <input
+            type="text"
+            id="cupping-name-input"
+            class="wt-name-input"
+            placeholder="e.g. Morning at the kitchen table..."
+            maxlength="60"
+            value="${cuppingName}"
+            oninput="cuppingName = this.value.trim()"
+          />
+        </div>
+        <div class="wt-detail" style="margin-top:14px">
+          You can leave it blank if you prefer — just tap <em>Let's go</em> to start.
+        </div>
+      </div>`;
+
+    // focus input on desktop
+    setTimeout(() => {
+      const inp = document.getElementById('cupping-name-input');
+      if (inp) inp.focus();
+    }, 300);
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  let flavourPicks = [];       // { label, family, group }
+  let flavourLevel = 'family'; // 'family' | 'group' | 'specific'
+  let flavourFamily = null;
+  let flavourGroup  = null;
+  const MAX_PICKS = 4;
+
+  const FF_WHEEL = [
+    { id:'fruity',  name:'Fruity',          emoji:'🍓', hint:'Bright, juicy, fresh fruit notes',
+      groups:[
+        { id:'berry',       name:'Berry',        emoji:'🫐', hint:'Dark or red berry fruits',        flavours:['Blackberry','Raspberry','Blueberry','Strawberry'] },
+        { id:'citrus',      name:'Citrus',        emoji:'🍋', hint:'Bright, zesty, acidic',           flavours:['Lemon','Lime','Orange','Grapefruit'] },
+        { id:'stonefruit',  name:'Stone Fruit',   emoji:'🍑', hint:'Soft, sweet stone fruits',        flavours:['Peach','Apricot','Cherry','Plum'] },
+        { id:'tropical',    name:'Tropical',      emoji:'🥭', hint:'Exotic, sweet tropical fruits',   flavours:['Mango','Pineapple','Papaya','Passion Fruit'] },
+        { id:'dried-fruit', name:'Dried Fruit',   emoji:'🍇', hint:'Raisin, date, concentrated',      flavours:['Raisin','Prune','Date','Fig'] },
+      ]
+    },
+    { id:'floral',  name:'Floral',           emoji:'🌸', hint:'Delicate, perfumed, flower-like',
+      groups:[
+        { id:'black-tea',   name:'Black Tea',     emoji:'🍵', hint:'Dry, tannin-like floral quality', flavours:['Black Tea','Earl Grey','Chamomile'] },
+        { id:'floral-g',    name:'Floral',        emoji:'🌺', hint:'Fragrant, perfumed notes',        flavours:['Jasmine','Rose','Lavender','Orange Blossom','Elderflower'] },
+      ]
+    },
+    { id:'sweet',   name:'Sweet',            emoji:'🍯', hint:'Dessert-like, sugary, confectionery',
+      groups:[
+        { id:'vanilla',     name:'Vanilla',       emoji:'🍦', hint:'Creamy, soft vanilla and butter', flavours:['Vanilla','Cream','Butter'] },
+        { id:'brown-sugar', name:'Brown Sugar',   emoji:'🧁', hint:'Caramel, toffee, molasses',       flavours:['Brown Sugar','Caramel','Toffee','Honey','Maple Syrup'] },
+        { id:'chocolate',   name:'Chocolate',     emoji:'🍫', hint:'Cocoa and chocolate character',   flavours:['Dark Chocolate','Milk Chocolate','Cocoa'] },
+      ]
+    },
+    { id:'nutty',   name:'Nutty / Cocoa',    emoji:'🥜', hint:'Warm, roasted, earthy nut-like',
+      groups:[
+        { id:'nutty-g',     name:'Nutty',         emoji:'🥜', hint:'Roasted or raw nut flavours',     flavours:['Almond','Hazelnut','Peanut','Walnut','Pecan'] },
+        { id:'cocoa-g',     name:'Cocoa',         emoji:'🫘', hint:'Dry cocoa powder notes',          flavours:['Cocoa Powder','Dark Cocoa'] },
+      ]
+    },
+    { id:'spices',  name:'Spices',           emoji:'🌶', hint:'Warm, aromatic or pungent spice',
+      groups:[
+        { id:'brown-spice', name:'Warm Spice',    emoji:'🍂', hint:'Soft, baking-style warm spice',  flavours:['Cinnamon','Nutmeg','Cardamom','Ginger'] },
+        { id:'pungent',     name:'Pungent',       emoji:'🧄', hint:'Strong, sharp spice',             flavours:['Pepper','Clove','Anise','Tobacco'] },
+      ]
+    },
+    { id:'roasted', name:'Roasted',          emoji:'🔥', hint:'Toasty, smoky, dark roast character',
+      groups:[
+        { id:'cereal',      name:'Cereal / Grain',emoji:'🌾', hint:'Malt, bread, biscuit notes',      flavours:['Malt','Grain','Toast','Biscuit'] },
+        { id:'burnt',       name:'Burnt / Smoky', emoji:'💨', hint:'Char, smoke, dark roast',          flavours:['Smoky','Ashy','Charred','Bitter'] },
+      ]
+    },
+    { id:'veggie',  name:'Veggie / Earthy',  emoji:'🌿', hint:'Green, earthy, herbal or woody',
+      groups:[
+        { id:'fresh-veg',   name:'Fresh / Green', emoji:'🌱', hint:'Grassy, herbal, green notes',     flavours:['Grass','Green Tea','Herb','Cucumber'] },
+        { id:'earthy',      name:'Earthy',        emoji:'🌍', hint:'Soil, wood, mushroom, forest',    flavours:['Mushroom','Earthy','Woody','Cedar'] },
+      ]
+    },
+    { id:'sour',    name:'Sour / Fermented', emoji:'🍋', hint:'Sharp, acidic, fermented notes',
+      groups:[
+        { id:'sour-g',      name:'Sour',          emoji:'😬', hint:'Acidic, mouth-puckering',         flavours:['Sour','Acidic','Tangy','Sharp'] },
+        { id:'fermented',   name:'Fermented',     emoji:'🍶', hint:'Wine-like, beer-like, funky',      flavours:['Winey','Yeasty','Funky'] },
+        { id:'bright-acid', name:'Bright Acidity',emoji:'🍊', hint:'Clean, crisp citrus acidity',     flavours:['Citric','Malic','Bright','Clean'] },
+      ]
+    },
+  ];
+
+  function ffSlug(s) { return s.toLowerCase().replace(/[^a-z0-9]/g,'-'); }
+
+  function showFlavourStep() {
+    flavourStepActive = true;
+    flavourPicks = [];
+    flavourLevel = 'family';
+    flavourFamily = null;
+    flavourGroup = null;
+
+    // update topbar
+    document.getElementById('wt-current-num').textContent = '8';
+    document.getElementById('wt-progress').style.width = '100%';
+    STEPS.forEach((_, i) => { document.getElementById('dot-'+i).className = 'wt-dot done'; });
+
+    // update back/next buttons
+    const backBtn = document.getElementById('btn-back');
+    const nextBtn = document.getElementById('btn-next');
+    backBtn.disabled = false;
+    nextBtn.textContent = 'Finish ✓';
+    nextBtn.className = 'btn-next finish';
+    nextBtn.onclick = finishCupping;
+
+    renderFlavourFamilies();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function renderFlavourFamilies() {
+    flavourLevel = 'family'; flavourFamily = null; flavourGroup = null;
+    const haspicks = flavourPicks.length > 0;
+    const full = flavourPicks.length >= MAX_PICKS;
+    const card = `
+      <div class="wt-card">
+        <span class="wt-emoji">🍓</span>
+        <h2 class="wt-heading">${haspicks ? 'Pick another flavour' : 'What did you taste?'}</h2>
+        <p class="wt-text">${full ? 'You\'ve picked 4 flavours \u2014 tap Finish or remove one to swap it.' : 'Pick up to <strong>4 flavours</strong>. Tap a family to explore and narrow it down.'}</p>
+        ${flavourCounterHTML()}
+        <div class="wt-flavour-tiles">
+          ${FF_WHEEL.map(f => {
+            const alreadyPicked = flavourPicks.some(p => p.label === f.name);
+            const pickedFromFamily = flavourPicks.some(p => p.family === f.name);
+            const tileDisabled = full && !alreadyPicked;
+            return `
+            <div class="wt-ftile ${tileDisabled ? 'disabled' : ''} ${pickedFromFamily ? 'has-pick' : ''}" onclick="flavourSelectFamily('${f.id}')">
+              <span class="wt-ftile-emoji">${f.emoji}</span>
+              <span class="wt-ftile-name">${f.name}</span>
+              <span class="wt-ftile-hint">${f.hint}</span>
+            </div>`;
+          }).join('')}
+        </div>
+        ${flavourPicksHTML()}
+      </div>`;
+    document.getElementById('wt-card-container').innerHTML = card;
+  }
+
+  function renderFlavourGroups() {
+    flavourLevel = 'group'; flavourGroup = null;
+    const full = flavourPicks.length >= MAX_PICKS;
+    const justPicked = flavourPicks.some(p => p.label === flavourFamily.name);
+    const card = `
+      <div class="wt-card">
+        <button class="wt-flavour-back" onclick="renderFlavourFamilies()">← Back to all families</button>
+        <span style="font-size:1.8rem;display:block;margin:10px 0 8px">${flavourFamily.emoji}</span>
+        <h2 class="wt-heading">${flavourFamily.name}</h2>
+        <p class="wt-text">Can you narrow it down, or does it just feel ${flavourFamily.name.toLowerCase()}?</p>
+        ${flavourCounterHTML()}
+        <div class="wt-flavour-tiles">
+          <div class="wt-ftile wt-ftile-just ${justPicked ? 'selected' : ''} ${full && !justPicked ? 'disabled' : ''}"
+            onclick="flavourQuickAdd('${flavourFamily.name}', '${flavourFamily.name}')">
+            <span class="wt-ftile-name">Just ${flavourFamily.name}</span>
+            <span class="wt-ftile-hint">Can't pin it down further — that's fine</span>
+          </div>
+          ${flavourFamily.groups.map(g => {
+            const dis = full && !flavourPicks.some(p => p.label === g.name);
+            return `
+            <div class="wt-ftile ${dis ? 'disabled' : ''}" onclick="flavourSelectGroup('${g.id}')">
+              <span class="wt-ftile-emoji">${g.emoji}</span>
+              <span class="wt-ftile-name">${g.name}</span>
+              <span class="wt-ftile-hint">${g.hint}</span>
+            </div>`;
+          }).join('')}
+        </div>
+        ${flavourPicksHTML()}
+      </div>`;
+    document.getElementById('wt-card-container').innerHTML = card;
+  }
+
+  function renderFlavourSpecifics() {
+    flavourLevel = 'specific';
+    const full = flavourPicks.length >= MAX_PICKS;
+    const justPicked = flavourPicks.some(p => p.label === flavourGroup.name);
+    const card = `
+      <div class="wt-card">
+        <button class="wt-flavour-back" onclick="flavourSelectFamily('${flavourFamily.id}')">← Back to ${flavourFamily.name}</button>
+        <span style="font-size:1.8rem;display:block;margin:10px 0 8px">${flavourGroup.emoji}</span>
+        <h2 class="wt-heading">${flavourGroup.name}</h2>
+        <p class="wt-text">Which of these fits? Or just go with ${flavourGroup.name.toLowerCase()} if none feel exact.</p>
+        ${flavourCounterHTML()}
+        <div class="wt-flavour-tiles wide">
+          <div class="wt-ftile wt-ftile-just ${justPicked ? 'selected' : ''} ${full && !justPicked ? 'disabled' : ''}"
+            onclick="flavourQuickAdd('${flavourGroup.name}', '${flavourFamily.name}')">
+            <span class="wt-ftile-name">Just ${flavourGroup.name}</span>
+            <span class="wt-ftile-hint">Can't pin it down further — that's fine</span>
+          </div>
+          ${flavourGroup.flavours.map(fl => {
+            const sel = flavourPicks.some(p => p.label === fl);
+            const dis = !sel && full;
+            return `<div class="wt-ftile ${sel ? 'selected' : ''} ${dis ? 'disabled' : ''}" onclick="flavourToggle('${fl}')">
+              <span class="wt-ftile-name">${fl}</span>
+            </div>`;
+          }).join('')}
+        </div>
+        ${flavourPicksHTML()}
+      </div>`;
+    document.getElementById('wt-card-container').innerHTML = card;
+  }
+
+  function flavourCounterHTML() {
+    const n = flavourPicks.length;
+    return `<div class="wt-flavour-counter"><span>${n}</span> of ${MAX_PICKS} flavours picked</div>`;
+  }
+
+  function flavourPicksHTML() {
+    if (!flavourPicks.length) return '';
+    return `<div class="wt-flavour-picks">
+      ${flavourPicks.map(p => `
+        <span class="wt-fpick">${p.label}
+          <button class="wt-fpick-remove" onclick="flavourRemove('${p.label}')">✕</button>
+        </span>`).join('')}
+    </div>`;
+  }
+
+  function flavourSelectFamily(id) {
+    flavourFamily = FF_WHEEL.find(f => f.id === id);
+    renderFlavourGroups();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function flavourSelectGroup(id) {
+    flavourGroup = flavourFamily.groups.find(g => g.id === id);
+    renderFlavourSpecifics();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function flavourQuickAdd(label, family, emoji) {
+    if (flavourPicks.some(p => p.label === label)) return;
+    if (flavourPicks.length >= MAX_PICKS) return;
+    flavourPicks.push({ label, family, group: '' });
+    renderFlavourFamilies();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function flavourToggle(label) {
+    const idx = flavourPicks.findIndex(p => p.label === label);
+    if (idx > -1) {
+      flavourPicks.splice(idx, 1);
+      renderFlavourSpecifics();
+    } else {
+      if (flavourPicks.length >= MAX_PICKS) return;
+      flavourPicks.push({ label, family: flavourFamily.name, group: flavourGroup.name });
+      renderFlavourFamilies();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  function flavourRemove(label) {
+    flavourPicks = flavourPicks.filter(p => p.label !== label);
+    // re-render whichever level we're on
+    if (flavourLevel === 'specific') renderFlavourSpecifics();
+    else if (flavourLevel === 'group') renderFlavourGroups();
+    else renderFlavourFamilies();
+  }
+
+  function finishCupping() {
+    const nextBtn = document.getElementById('btn-next');
+    nextBtn.textContent = "I\'ve done this →";
+    nextBtn.className = 'btn-next';
+    nextBtn.onclick = nextStep;
+
+    document.getElementById('wt-card-container').innerHTML = '';
+    document.getElementById('wt-actions').style.display = 'none';
+    const complete = document.getElementById('wt-complete');
+    complete.classList.add('active');
+
+    // Show cupping name if one was given
+    const titleEl = complete.querySelector('.complete-title');
+    if (titleEl) {
+      titleEl.textContent = cuppingName
+        ? `"${cuppingName}"`
+        : 'Your first cupping, done.';
+    }
+
+    // Populate result tags
+    const tagsEl = document.getElementById('wt-result-tags');
+    if (flavourPicks.length) {
+      tagsEl.innerHTML = flavourPicks.map(p => `<span class="result-tag">${p.label}</span>`).join('');
+    } else {
+      tagsEl.innerHTML = '<span style="font-size:0.85rem;color:var(--light);font-style:italic">No flavours picked — that\'s ok too!</span>';
+    }
+
+    // Summary sentence
+    const noteEl = document.getElementById('wt-result-note');
+    if (flavourPicks.length) {
+      const families = [...new Set(flavourPicks.map(p => p.family))];
+      const summary = families.length === 1
+        ? `Mostly <strong>${families[0].toLowerCase()}</strong> notes in this cup.`
+        : `A mix of <strong>${families.slice(0,-1).join(', ').toLowerCase()}</strong> and <strong>${families[families.length-1].toLowerCase()}</strong> — an interesting cup!`;
+      noteEl.innerHTML = summary + ' Keep cupping and see how your notes change as it cools.';
+    } else {
+      noteEl.innerHTML = '';
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function tryBookmark() {
+    const stepsEl = document.getElementById('bookmark-steps');
+    const titleEl = document.getElementById('bookmark-platform-title');
+    const listEl  = document.getElementById('bookmark-step-list');
+
+    // Detect platform
+    const ua = navigator.userAgent;
+    const isIOS     = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const isSafari  = /Safari/i.test(ua) && !/Chrome/i.test(ua);
+
+    let platform, steps;
+
+    if (isIOS) {
+      platform = '📱 iPhone / iPad — Safari';
+      steps = [
+        'Tap the <strong>Share</strong> button at the bottom of your screen (the box with an arrow pointing up)',
+        'Scroll down and tap <strong>"Add to Home Screen"</strong>',
+        'Tap <strong>Add</strong> in the top right — the guide will appear on your home screen like an app',
+      ];
+    } else if (isAndroid) {
+      platform = '📱 Android — Chrome';
+      steps = [
+        'Tap the <strong>three-dot menu</strong> (⋮) in the top right corner of Chrome',
+        'Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong>',
+        'Tap <strong>Add</strong> to confirm — it\'ll appear on your home screen',
+      ];
+    } else if (isSafari) {
+      platform = '🖥 Safari';
+      steps = [
+        'Press <strong>⌘ + D</strong> to bookmark this page',
+        'Or go to <strong>Bookmarks → Add Bookmark</strong> from the menu bar',
+        'Give it a name and save it somewhere easy to find',
+      ];
+    } else {
+      platform = '🖥 Desktop browser';
+      steps = [
+        'Press <strong>Ctrl + D</strong> (Windows / Linux) or <strong>⌘ + D</strong> (Mac) to bookmark this page',
+        'Choose a folder and save — it\'ll be there whenever you want to cup again',
+      ];
+    }
+
+    titleEl.textContent = platform;
+    listEl.innerHTML = steps.map((s, i) => `
+      <li>
+        <span class="step-num">0${i+1}</span>
+        <span>${s}</span>
+      </li>`).join('');
+
+    stepsEl.style.display = 'block';
+
+    // Swap button text
+    const btn = document.querySelector('#bookmark-hint .hint-action-btn');
+    if (btn) btn.style.display = 'none';
+
+    stepsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function restartWalkthrough() {
+    flavourStepActive = false;
+    flavourPicks = [];
+    cuppingName = '';
+    document.getElementById('wt-complete').classList.remove('active');
+    document.getElementById('bookmark-steps').style.display = 'none';
+    const btn = document.querySelector('#bookmark-hint .hint-action-btn');
+    if (btn) btn.style.display = 'inline-block';
+    startWalkthrough();
+  }
+
+  function startWalkthrough() {
+    current = 0;
+    flavourStepActive = false;
+    onNameStep = false;
+    document.getElementById('intro-view').style.display = 'none';
+    document.getElementById('wt-complete').classList.remove('active');
+    const wt = document.getElementById('walkthrough-view');
+    wt.style.display = 'flex';
+    wt.style.flexDirection = 'column';
+    buildDots();
+    renderNameStep();
+  }
+
+  function exitWalkthrough() {
+    clearTimer();
+    flavourStepActive = false;
+    document.getElementById('walkthrough-view').style.display = 'none';
+    document.getElementById('wt-complete').classList.remove('active');
+    document.getElementById('intro-view').style.display = 'block';
+    window.scrollTo({ top: 0 });
+  }
+</script>
+
+
+</body>
+</html>
