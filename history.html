@@ -566,178 +566,6 @@
   track('page_view', { page: 'history' });
 
   // ══════════════════════════════════════════════════════════
-  //  MOCK DATA
-  //  Replace loadSessions() with a real API fetch when the
-  //  backend is ready. Session shape must match this structure.
-  //  Each coffee in the coffees array matches the shape written
-  //  by cupping.html — { name, data: { scores, flavours, ... } }
-  // ══════════════════════════════════════════════════════════
-  const MOCK_SESSIONS = [
-    {
-      id: 1,
-      name: 'Saturday morning — Kenyan naturals',
-      date: '2025-03-15',
-      coffees: [
-        {
-          name: 'Kamwangi AB',
-          data: {
-            origin: 'Kenya, Kirinyaga',
-            roaster: 'Workshop Coffee',
-            process: 'Washed',
-            roast: 'Light',
-            scores: { Acidity: 8.5, Body: 7.5, Sweetness: 8, Finish: 8, Balance: 8 },
-            flavours: ['Blackberry','Lemon','Brown Sugar'],
-            notes: 'Bright and clean. Beautiful citric acidity that softens as it cools. Long finish.',
-          }
-        },
-        {
-          name: 'Gakuyuini AA',
-          data: {
-            origin: 'Kenya, Nyeri',
-            roaster: 'Workshop Coffee',
-            process: 'Washed',
-            roast: 'Light',
-            scores: { Acidity: 9, Body: 7, Sweetness: 7.5, Finish: 8.5, Balance: 8.5 },
-            flavours: ['Raspberry','Citric','Black Tea'],
-            notes: 'More delicate than the Kamwangi. Floral and complex.',
-          }
-        },
-      ]
-    },
-    {
-      id: 2,
-      name: 'Ethiopian batch comparison — Q3',
-      date: '2025-03-08',
-      coffees: [
-        {
-          name: 'Yirgacheffe Natural Lot 12',
-          data: {
-            origin: 'Ethiopia, Yirgacheffe',
-            roaster: 'Has Bean',
-            process: 'Natural',
-            roast: 'Light',
-            scores: { Acidity: 7, Body: 8, Sweetness: 9, Finish: 8.5, Balance: 8 },
-            flavours: ['Blueberry','Mango','Caramel'],
-            notes: 'Classic natural processing character. Heavy and sweet.',
-          }
-        },
-        {
-          name: 'Yirgacheffe Natural Lot 13',
-          data: {
-            origin: 'Ethiopia, Yirgacheffe',
-            roaster: 'Has Bean',
-            process: 'Natural',
-            roast: 'Light',
-            scores: { Acidity: 7.5, Body: 7.5, Sweetness: 8.5, Finish: 8, Balance: 7.5 },
-            flavours: ['Blueberry','Passion Fruit','Honey'],
-            notes: 'Slightly brighter than Lot 12. Less body but more clarity.',
-          }
-        },
-        {
-          name: 'Yirgacheffe Washed Lot 4',
-          data: {
-            origin: 'Ethiopia, Yirgacheffe',
-            roaster: 'Has Bean',
-            process: 'Washed',
-            roast: 'Light',
-            scores: { Acidity: 8.5, Body: 6.5, Sweetness: 7.5, Finish: 8, Balance: 8 },
-            flavours: ['Jasmine','Lemon','Elderflower'],
-            notes: 'Completely different profile. Delicate, tea-like.',
-          }
-        },
-      ]
-    },
-    {
-      id: 3,
-      name: 'Quick Tuesday cup',
-      date: '2025-03-04',
-      coffees: [
-        {
-          name: 'Colombia Huila Anaerobic',
-          data: {
-            origin: 'Colombia, Huila',
-            roaster: 'Squaremile',
-            process: 'Anaerobic',
-            roast: 'Medium-Light',
-            scores: { Acidity: 7, Body: 8.5, Sweetness: 9, Finish: 7.5, Balance: 7.5 },
-            flavours: ['Caramel','Dark Chocolate','Winey'],
-            notes: 'Funky in a good way. Rich and boozy when hot, smooths out when cool.',
-          }
-        },
-      ]
-    },
-    {
-      id: 4,
-      name: 'Gesha comparison',
-      date: '2025-02-22',
-      coffees: [
-        {
-          name: 'Panama Gesha Natural',
-          data: {
-            origin: 'Panama, Boquete',
-            roaster: 'Onyx Coffee',
-            process: 'Natural',
-            roast: 'Light',
-            scores: { Acidity: 8, Body: 7, Sweetness: 9.5, Finish: 9.5, Balance: 9 },
-            flavours: ['Jasmine','Peach','Elderflower','Honey'],
-            notes: 'Genuinely exceptional. Floral and perfumed like nothing else.',
-          }
-        },
-        {
-          name: 'Ethiopia Gesha Washed',
-          data: {
-            origin: 'Ethiopia, Guji',
-            roaster: 'Onyx Coffee',
-            process: 'Washed',
-            roast: 'Light',
-            scores: { Acidity: 8.5, Body: 6.5, Sweetness: 8.5, Finish: 9, Balance: 8.5 },
-            flavours: ['Jasmine','Lemon','Orange Blossom'],
-            notes: 'More citric and sharp than the Panama. Lighter body.',
-          }
-        },
-      ]
-    },
-    {
-      id: 5,
-      name: 'Monday roastery QC — Batch 24-11',
-      date: '2025-02-10',
-      coffees: [
-        {
-          name: 'Guatemala Huehuetenango',
-          data: {
-            origin: 'Guatemala, Huehuetenango',
-            roaster: 'Internal',
-            process: 'Washed',
-            roast: 'Medium',
-            scores: { Acidity: 7, Body: 8, Sweetness: 7.5, Finish: 7, Balance: 7.5 },
-            flavours: ['Brown Sugar','Almond','Toast'],
-            notes: 'Solid. Reliable. Good base espresso profile.',
-          }
-        },
-      ]
-    },
-    {
-      id: 6,
-      name: 'Monday roastery QC — Batch 24-12',
-      date: '2025-02-17',
-      coffees: [
-        {
-          name: 'Guatemala Huehuetenango',
-          data: {
-            origin: 'Guatemala, Huehuetenango',
-            roaster: 'Internal',
-            process: 'Washed',
-            roast: 'Medium',
-            scores: { Acidity: 6.5, Body: 8, Sweetness: 7, Finish: 6.5, Balance: 7 },
-            flavours: ['Brown Sugar','Almond','Bitter'],
-            notes: 'Slightly darker than 24-11. Acidity has dropped. Check roast curve.',
-          }
-        },
-      ]
-    },
-  ];
-
-  // ══════════════════════════════════════════════════════════
   //  STATE
   // ══════════════════════════════════════════════════════════
   let sessions     = [];      // full session array from loadSessions()
@@ -928,9 +756,16 @@
     document.getElementById('session-count').textContent =
       `${sorted.length} session${sorted.length !== 1 ? 's' : ''}${filtered.length < sessions.length ? ' (filtered)' : ''}`;
 
-    // Show empty state if no results
-    document.getElementById('empty-state').classList.toggle('show', sorted.length === 0);
-    document.getElementById('session-table').style.display = sorted.length ? 'table' : 'none';
+    // Show empty state if no results — message differs based on context
+    const isEmpty = sorted.length === 0;
+    const isFiltered = filtered.length < sessions.length;
+    document.getElementById('empty-state').classList.toggle('show', isEmpty);
+    document.getElementById('session-table').style.display = isEmpty ? 'none' : 'table';
+    if (isEmpty) {
+      document.querySelector('.empty-text').innerHTML = isFiltered
+        ? 'No sessions match your filters.<br>Try adjusting the search or date range.'
+        : 'No sessions yet.<br><a href="cupping.html" style="color:var(--accent);text-decoration:none">Start your first cupping →</a>';
+    }
 
     const tbody = document.getElementById('table-body');
     tbody.innerHTML = sorted.map((s, i) => {
