@@ -237,7 +237,7 @@
       border-bottom: 1px solid var(--divider);
       cursor: pointer; transition: background 0.15s;
     }
-    tbody tr:hover { background: rgba(45,59,45,0.03); }
+    tbody tr:hover { background: rgba(45,59,45,0.05); }
     tbody tr.selected { background: rgba(201,168,76,0.06); }
 
     td {
@@ -249,20 +249,20 @@
     /* Date column */
     .td-date {
       font-family: 'DM Mono', monospace; font-size: 0.7rem;
-      color: var(--mid); white-space: nowrap;
+      color: var(--brown); white-space: nowrap;
     }
 
     /* Session name — primary identifier */
-    .td-name { font-weight: 500; color: var(--brown); }
+    .td-name { font-weight: 600; color: var(--dark); }
     .td-name-sub {
-      font-size: 0.72rem; color: var(--mid); margin-top: 2px;
-      font-weight: 400;
+      font-size: 0.72rem; color: var(--brown); margin-top: 2px;
+      font-weight: 400; opacity: 0.8;
     }
 
     /* Coffee count badge */
     .td-coffees {
       font-family: 'DM Mono', monospace; font-size: 0.7rem;
-      color: var(--mid);
+      color: var(--brown);
     }
 
     /* Score badge — colour coded */
@@ -272,9 +272,9 @@
       font-family: 'DM Mono', monospace; font-size: 0.72rem;
       font-weight: bold; flex-shrink: 0;
     }
-    .score-pill.high   { background: rgba(74,103,65,0.15);  color: var(--green); }
-    .score-pill.mid    { background: rgba(201,168,76,0.12);  color: var(--accent); }
-    .score-pill.low    { background: rgba(45,59,45,0.08);   color: var(--mid); }
+    .score-pill.high   { background: rgba(74,103,65,0.2);   color: #2d4a26; }
+    .score-pill.mid    { background: rgba(201,168,76,0.18);  color: #7a5e1a; }
+    .score-pill.low    { background: rgba(45,59,45,0.12);   color: var(--brown); }
     .score-pill.none   { background: var(--steam);          color: var(--light); font-size: 0.6rem; }
 
     /* Flavour tags — compact */
@@ -284,13 +284,13 @@
       font-family: 'DM Mono', monospace; font-size: 0.55rem;
       letter-spacing: 0.05em; text-transform: uppercase;
       padding: 3px 8px; border-radius: 20px;
-      background: rgba(201,168,76,0.07);
-      border: 1px solid rgba(201,168,76,0.18);
-      color: var(--accent); white-space: nowrap;
+      background: rgba(201,168,76,0.12);
+      border: 1px solid rgba(201,168,76,0.3);
+      color: #7a5e1a; white-space: nowrap;
     }
     .flavour-more {
       font-family: 'DM Mono', monospace; font-size: 0.55rem;
-      color: var(--light); white-space: nowrap; padding-top: 2px;
+      color: var(--brown); white-space: nowrap; padding-top: 2px;
     }
 
     /* ── DRAWER ── */
@@ -795,7 +795,7 @@
             ${extraCount > 0 ? `<span class="flavour-more">+${extraCount}</span>` : ''}
           </div>
         </td>
-        <td style="color:var(--mid);font-size:0.8rem">${roasters.join(', ') || '—'}</td>
+        <td style="color:var(--brown);font-size:0.8rem">${roasters.join(', ') || '—'}</td>
       </tr>`;
     }).join('');
   }
