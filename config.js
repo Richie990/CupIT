@@ -35,3 +35,27 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Initialise the Supabase client and attach to window so all
 // pages can access it as window.supabaseClient
 window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── ANALYTICS ──
+// Global track() function — inserts an event into the analytics table.
+// user_id is included if a session exists, otherwise the event is anonymous.
+// Called on every page for page_view and key user interactions.
+window.track = async function(event, metadata = {}) {
+  try {
+    // Try to get the current user id — nullable so anonymous events are fine
+    let user_id = null;
+    try {
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (session) user_id = session.user.id;
+    } catch(e) { /* no session available, continue anonymously */ }
+
+    await window.supabaseClient.from('analytics').insert({
+      user_id,
+      event,
+      metadata,
+    });
+  } catch(e) {
+    // Fail silently — analytics should never break the page
+    console.warn('[CupIT analytics] Failed to track event:', event, e.message);
+  }
+};

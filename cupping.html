@@ -463,12 +463,6 @@
 
 
 <script>
-  // ── ANALYTICS ──
-  // TODO: replace console.log with Supabase insert when ready
-  function track(event, metadata = {}) {
-    console.log('[CupIT analytics]', event, metadata);
-  }
-
   // Track page view on load
   track('page_view', { page: 'cupping' });
 
