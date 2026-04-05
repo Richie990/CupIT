@@ -40,23 +40,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#faf6ee" />
+  <meta name="theme-color" content="#e8e4d9" />
   <title>Dashboard — CupIT</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
   <style>
     /* ── DESIGN TOKENS — shared across all CupIT pages ── */
     :root {
-      --bg:      #faf6ee;
-      --paper:   #fff9f0;
-      --dark:    #1c0f05;
-      --brown:   #5c3317;
-      --mid:     #9b6b47;
-      --light:   #c9a882;
-      --accent:  #b85c2b;
-      --steam:   #e8ddd0;
-      --divider: rgba(92,51,23,0.1);
-      --green:   #4a6741;
+      --bg:      #e8e4d9;
+      --paper:   #f0ede5;
+      --dark:    #1a2319;
+      --brown:   #2d3b2d;
+      --mid:     #8faa8b;
+      --light:   #8faa8b;
+      --accent:  #c9a84c;
+      --steam:   #e8e4d9;
+      --divider: rgba(45,59,45,0.1);
+      --green:   #2d3b2d;
       --r:       16px;
     }
 
@@ -157,16 +157,16 @@
     .action-card:hover {
       border-color: var(--accent);
       transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(92,51,23,0.1);
+      box-shadow: 0 8px 24px rgba(45,59,45,0.1);
     }
     /* Primary action card gets a warm tinted background */
     .action-card.primary {
-      background: var(--dark);
-      border-color: var(--dark);
+      background: #e8e4d9;
+      border-color: #e8e4d9;
     }
     .action-card.primary:hover {
-      border-color: var(--accent);
-      background: #2a1508;
+      border-color: #ffffff;
+      background: #ffffff;
     }
     .action-card-icon {
       font-size: 1.8rem; margin-bottom: 14px; display: block;
@@ -176,12 +176,12 @@
       font-size: 1.1rem; font-weight: 600;
       color: var(--brown); margin-bottom: 6px; line-height: 1.2;
     }
-    .action-card.primary .action-card-label { color: var(--cream); }
+    .action-card.primary .action-card-label { color: #1a2319; }
     .action-card-desc {
       font-size: 0.78rem; color: var(--mid);
       line-height: 1.5; flex: 1;
     }
-    .action-card.primary .action-card-desc { color: rgba(245,233,208,0.5); }
+    .action-card.primary .action-card-desc { color: rgba(26,35,25,0.6); }
     .action-card-arrow {
       font-family: 'DM Mono', monospace; font-size: 0.6rem;
       letter-spacing: 0.1em; text-transform: uppercase;
@@ -191,8 +191,8 @@
     .action-card:hover .action-card-arrow {
       color: var(--accent); letter-spacing: 0.16em;
     }
-    .action-card.primary .action-card-arrow { color: rgba(245,233,208,0.4); }
-    .action-card.primary:hover .action-card-arrow { color: var(--light); }
+    .action-card.primary .action-card-arrow { color: rgba(26,35,25,0.4); }
+    .action-card.primary:hover .action-card-arrow { color: #1a2319; }
 
     /* ── RECENT SESSIONS ── */
     .recent-section {
@@ -227,7 +227,7 @@
     }
     .recent-item:hover {
       border-color: var(--accent);
-      background: rgba(184,92,43,0.03);
+      background: rgba(201,168,76,0.03);
     }
     .recent-score {
       width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
@@ -235,8 +235,8 @@
       font-family: 'DM Mono', monospace; font-size: 0.7rem; font-weight: bold;
     }
     .recent-score.high { background: rgba(74,103,65,0.12); color: var(--green); }
-    .recent-score.mid  { background: rgba(184,92,43,0.1);  color: var(--accent); }
-    .recent-score.low  { background: rgba(92,51,23,0.07);  color: var(--mid); }
+    .recent-score.mid  { background: rgba(201,168,76,0.1);  color: var(--accent); }
+    .recent-score.low  { background: rgba(45,59,45,0.07);  color: var(--mid); }
     .recent-score.none { background: var(--steam); color: var(--light); font-size: 0.6rem; }
     .recent-info { flex: 1; min-width: 0; }
     .recent-name {
@@ -256,8 +256,8 @@
       font-family: 'DM Mono', monospace; font-size: 0.52rem;
       letter-spacing: 0.04em; text-transform: uppercase;
       padding: 3px 7px; border-radius: 20px;
-      background: rgba(184,92,43,0.07);
-      border: 1px solid rgba(184,92,43,0.15);
+      background: rgba(201,168,76,0.07);
+      border: 1px solid rgba(201,168,76,0.15);
       color: var(--accent); white-space: nowrap;
     }
 
@@ -292,7 +292,7 @@
     .footer-links a {
       font-family: 'DM Mono', monospace; font-size: 0.56rem;
       letter-spacing: 0.1em; text-transform: uppercase;
-      color: rgba(92,51,23,0.3); text-decoration: none; transition: color 0.2s;
+      color: rgba(45,59,45,0.3); text-decoration: none; transition: color 0.2s;
     }
     .footer-links a:hover { color: var(--mid); }
 
