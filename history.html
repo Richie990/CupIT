@@ -459,6 +459,7 @@
   <div class="nav-links">
     <a href="cupping.html" class="nav-link">New session</a>
     <a href="history.html" class="nav-link active">History</a>
+    <a href="#" class="nav-link" onclick="signOut(event)">Sign out</a>
   </div>
 </nav>
 
@@ -945,6 +946,13 @@
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeDrawer();
   });
+
+  // Signs the user out and redirects to homepage
+  async function signOut(e) {
+    e.preventDefault();
+    await window.supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  }
 
   init();
 </script>

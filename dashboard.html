@@ -369,7 +369,7 @@
 <footer>
   <a href="dashboard.html" class="footer-logo">Cup<em>IT</em></a>
   <ul class="footer-links">
-    <li><a href="index.html">Sign out</a></li>
+    <li><a href="#" onclick="signOut(event)">Sign out</a></li>
   </ul>
 </footer>
 
@@ -506,6 +506,13 @@
 
   function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Signs the user out and redirects to homepage
+  async function signOut(e) {
+    e.preventDefault();
+    await window.supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
   }
 
   init();

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Password Reset  (reset.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    User enters their email and receives a password reset link.
+    On submit, calls supabase.auth.resetPasswordForEmail() which
+    sends an email with a link pointing to newpassword.html.
+
+  FLOW:
+    login.html → reset.html → (email sent) → newpassword.html
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2319" />
+  <title>Reset Password — CupIT</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CupIT" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --bg:      #e8e4d9;
+      --paper:   #f0ede5;
+      --dark:    #1a2319;
+      --brown:   #2d3b2d;
+      --mid:     #8faa8b;
+      --light:   #8faa8b;
+      --accent:  #c9a84c;
+      --cream:   #e8e4d9;
+      --divider: rgba(45,59,45,0.12);
+      --r:       14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    nav {
+      background: var(--dark);
+      padding: 18px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-back {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-back:hover { color: var(--cream); }
+
+    .page-header {
+      background: var(--dark);
+      padding: 40px 24px 52px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(201,168,76,0.25) 0%, transparent 65%);
+    }
+    .page-header-content { position: relative; z-index: 1; }
+    .page-header-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px; display: block;
+    }
+    .page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 5vw, 2.4rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+    }
+    .page-header h1 em { font-style: italic; color: var(--light); }
+    .page-header-sub {
+      font-size: 0.9rem; color: rgba(232,228,217,0.7);
+      margin-top: 8px; font-weight: 300;
+    }
+
+    .form-container {
+      flex: 1; padding: 40px 20px 80px;
+      display: flex; align-items: flex-start; justify-content: center;
+    }
+    .form-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 20px; padding: 32px;
+      width: 100%; max-width: 420px;
+      box-shadow: 0 4px 32px rgba(45,59,45,0.08);
+      animation: fadeUp 0.4s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-group { margin-bottom: 20px; }
+    .form-label {
+      display: block;
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 7px;
+    }
+    .form-input {
+      width: 100%; padding: 13px 16px;
+      background: var(--bg);
+      border: 1.5px solid var(--divider);
+      border-radius: var(--r);
+      font-family: 'DM Sans', sans-serif; font-size: 1rem;
+      color: var(--dark); outline: none;
+      transition: border-color 0.2s; -webkit-appearance: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--light); font-style: italic; }
+    .form-input.error { border-color: #c0392b; }
+    .form-error {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: #c0392b; margin-top: 5px; display: none;
+    }
+    .form-error.show { display: block; }
+
+    .btn-submit {
+      width: 100%; padding: 15px;
+      background: #e8e4d9; color: #1a2319;
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border: none; border-radius: 50px; cursor: pointer;
+      transition: all 0.2s; margin-top: 4px;
+    }
+    .btn-submit:hover { background: #ffffff; }
+    .btn-submit:disabled { opacity: 0.45; pointer-events: none; }
+
+    .form-global-error {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: #c0392b; text-align: center; margin-top: 14px; min-height: 18px;
+    }
+
+    .success-state { display: none; text-align: center; padding: 16px 0; }
+    .success-icon { font-size: 2.6rem; margin-bottom: 14px; display: block; }
+    .success-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.3rem; color: var(--brown); margin-bottom: 8px;
+    }
+    .success-title em { font-style: italic; }
+    .success-body { font-size: 0.88rem; color: var(--mid); line-height: 1.65; }
+
+    .login-link {
+      text-align: center; margin-top: 22px;
+      font-size: 0.88rem; color: var(--mid);
+    }
+    .login-link a {
+      color: var(--brown); text-decoration: none;
+      border-bottom: 1px solid var(--divider); transition: border-color 0.2s;
+    }
+    .login-link a:hover { border-color: var(--brown); }
+
+    footer {
+      background: var(--dark); padding: 28px 24px; text-align: center;
+    }
+    .footer-links {
+      display: flex; justify-content: center; gap: 24px; list-style: none; flex-wrap: wrap;
+    }
+    .footer-links a {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--light); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
+  <a href="login.html" class="nav-back">← Back to login</a>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-content">
+    <span class="page-header-tag">Account</span>
+    <h1>Reset your <em>password</em></h1>
+    <p class="page-header-sub">We'll send a reset link to your email.</p>
+  </div>
+</div>
+
+<div class="form-container">
+  <div class="form-card">
+
+    <div class="success-state" id="success-state">
+      <span class="success-icon">✉️</span>
+      <h2 class="success-title">Check your <em>inbox</em></h2>
+      <p class="success-body" id="success-body"></p>
+    </div>
+
+    <div id="reset-form">
+      <div class="form-group">
+        <label class="form-label" for="email">Email address</label>
+        <input type="email" id="email" class="form-input"
+          placeholder="you@example.com" autocomplete="email" />
+        <p class="form-error" id="email-error">Please enter a valid email address</p>
+      </div>
+
+      <button class="btn-submit" onclick="submitReset()">Send reset link →</button>
+      <p class="form-global-error" id="form-global-error"></p>
+    </div>
+
+    <p class="login-link">Remember your password? <a href="login.html">Log in</a></p>
+
+  </div>
+</div>
+
+<footer>
+  <ul class="footer-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="login.html">Log in</a></li>
+    <li><a href="signup.html">Sign up</a></li>
+  </ul>
+</footer>
+
+<script>
+  function validateEmail(val) {
+    return val.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+  }
+
+  function setLoading(loading) {
+    const btn = document.querySelector('.btn-submit');
+    btn.disabled = loading;
+    if (loading) btn.textContent = 'Please wait...';
+  }
+
+  async function submitReset() {
+    const email = document.getElementById('email');
+    const globalError = document.getElementById('form-global-error');
+    globalError.textContent = '';
+
+    if (!validateEmail(email.value)) {
+      email.classList.add('error');
+      document.getElementById('email-error').classList.add('show');
+      return;
+    }
+    email.classList.remove('error');
+    document.getElementById('email-error').classList.remove('show');
+
+    setLoading(true);
+
+    try {
+      const { error } = await window.supabaseClient.auth.resetPasswordForEmail(
+        email.value.trim(),
+        { redirectTo: 'https://richie990.github.io/CupIT/newpassword.html' }
+      );
+
+      if (error) {
+        globalError.textContent = error.message;
+        setLoading(false);
+        return;
+      }
+
+      // Show success regardless of whether email exists — security best practice
+      document.getElementById('reset-form').style.display = 'none';
+      document.querySelector('.login-link').style.display = 'none';
+      document.getElementById('success-body').innerHTML =
+        `If an account exists for <strong>${email.value.trim()}</strong>, a reset link is on its way. Check your inbox and click the link to set a new password.`;
+      document.getElementById('success-state').style.display = 'block';
+
+    } catch(e) {
+      globalError.textContent = 'Something went wrong. Please try again.';
+      console.error(e);
+      setLoading(false);
+    }
+  }
+</script>
+</body>
+</html>
