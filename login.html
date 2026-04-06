@@ -194,8 +194,9 @@
       font-family: 'DM Mono', monospace; font-size: 0.58rem;
       letter-spacing: 0.08em; text-transform: uppercase;
       color: var(--light); text-decoration: none;
-      float: right; margin-top: -24px; margin-bottom: 18px;
-      display: block; transition: color 0.2s;
+      display: block; text-align: right;
+      margin-top: 6px; margin-bottom: 18px;
+      transition: color 0.2s;
     }
     .forgot-link:hover { color: var(--accent); }
 
@@ -285,7 +286,10 @@
 
 <nav>
   <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
-  <a href="index.html" class="nav-back">← Back to home</a>
+  <div style="display:flex;align-items:center;gap:20px">
+    <a href="index.html" class="nav-back">Home</a>
+    <a href="signup.html" class="nav-back">Sign up</a>
+  </div>
 </nav>
 
 <div class="page-header">
@@ -366,10 +370,6 @@
 </div>
 
 <footer>
-  <ul class="footer-links">
-    <li><a href="index.html">Home</a></li>
-    <li><a href="signup.html">Sign up</a></li>
-  </ul>
 </footer>
 
 <script>
