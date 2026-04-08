@@ -337,7 +337,7 @@
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="config.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.json" />
@@ -1110,11 +1110,16 @@
     // Populate the share link input
     document.getElementById('share-link').value = joinUrl;
 
-    // Generate QR code
+    // Generate QR code using qrcodejs
     const qrContainer = document.getElementById('qr-code');
     qrContainer.innerHTML = '';
-    QRCode.toCanvas(joinUrl, { width: 200, margin: 2, color: { dark: '#1a2319', light: '#f0ede5' } }, (err, canvas) => {
-      if (!err) qrContainer.appendChild(canvas);
+    new QRCode(qrContainer, {
+      text:           joinUrl,
+      width:          200,
+      height:         200,
+      colorDark:      '#1a2319',
+      colorLight:     '#f0ede5',
+      correctLevel:   QRCode.CorrectLevel.H,
     });
 
     goTo('share');
