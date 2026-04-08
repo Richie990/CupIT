@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Join Session  (join.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    Guest page — no account needed. Loaded via a shared QR code
+    or link containing a share_token in the URL query string.
+
+  FLOW:
+    1. Read token from URL
+    2. Fetch session from cupping_sessions using the token
+    3. Guest enters their name
+    4. Guest fills in scores/notes for each coffee
+       (only the params the host enabled)
+    5. Submit → insert row into session_responses
+    6. Show thank you screen
+
+  SUPABASE CALLS:
+    SELECT cupping_sessions WHERE share_token = ?  (public read via token)
+    INSERT session_responses                        (public insert)
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2319" />
+  <title>Join Cupping Session — CupIT</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CupIT" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --bg:      #e8e4d9;
+      --paper:   #f0ede5;
+      --dark:    #1a2319;
+      --brown:   #2d3b2d;
+      --mid:     #8faa8b;
+      --light:   #8faa8b;
+      --accent:  #c9a84c;
+      --cream:   #e8e4d9;
+      --divider: rgba(45,59,45,0.12);
+      --r:       14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: var(--dark);
+      padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(232,228,217,0.7);
+    }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      background: var(--dark);
+      padding: 32px 24px 44px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(201,168,76,0.25) 0%, transparent 65%);
+    }
+    .page-header-content { position: relative; z-index: 1; }
+    .page-header-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 10px; display: block;
+    }
+    .page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+    }
+    .page-header h1 em { font-style: italic; color: var(--light); }
+    .page-header-sub {
+      font-size: 0.88rem; color: rgba(232,228,217,0.7);
+      margin-top: 8px; font-weight: 300;
+    }
+
+    /* ── MAIN ── */
+    main {
+      flex: 1; padding: 24px 20px 80px;
+      max-width: 560px; width: 100%; margin: 0 auto;
+    }
+
+    /* ── LOADING / ERROR STATES ── */
+    .state-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 20px; padding: 40px 28px;
+      text-align: center; margin-top: 24px;
+    }
+    .state-icon { font-size: 2.4rem; margin-bottom: 14px; display: block; }
+    .state-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem; color: var(--brown); margin-bottom: 8px;
+    }
+    .state-body { font-size: 0.88rem; color: var(--mid); line-height: 1.65; }
+
+    /* ── NAME STEP ── */
+    .name-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 20px; padding: 28px;
+      margin-top: 24px;
+    }
+    .name-card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem; font-weight: 400;
+      color: var(--brown); margin-bottom: 6px;
+    }
+    .name-card p {
+      font-size: 0.85rem; color: var(--mid);
+      margin-bottom: 18px; line-height: 1.6;
+    }
+
+    /* ── COFFEE TABS ── */
+    .coffee-tabs {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin: 20px 0 12px;
+    }
+    .coffee-tab {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 8px 14px; border-radius: 50px;
+      border: 1.5px solid var(--divider);
+      background: var(--paper); color: var(--mid);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .coffee-tab.active {
+      background: var(--dark); color: var(--cream);
+      border-color: var(--dark);
+    }
+
+    /* ── COFFEE PANEL ── */
+    .coffee-panel { display: none; }
+    .coffee-panel.active { display: block; }
+
+    .section-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 18px; padding: 20px;
+      margin-bottom: 12px;
+    }
+    .section-card-title {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 14px; display: block;
+    }
+
+    /* Form fields */
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block;
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 6px;
+    }
+    .form-input, .form-textarea {
+      width: 100%; padding: 11px 14px;
+      background: var(--bg); border: 1.5px solid var(--divider);
+      border-radius: var(--r);
+      font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+      color: var(--dark); outline: none; transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-textarea:focus { border-color: var(--accent); }
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--light); font-style: italic; }
+    .form-textarea { resize: vertical; min-height: 80px; line-height: 1.55; }
+
+    /* Score sliders */
+    .score-row {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+    .score-label {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mid); width: 90px; flex-shrink: 0;
+    }
+    .score-slider {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 4px; border-radius: 2px;
+      background: var(--divider); outline: none;
+      transition: background 0.2s;
+    }
+    .score-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--dark); cursor: pointer;
+      border: 2px solid var(--paper);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    }
+    .score-val {
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      color: var(--brown); width: 28px; text-align: right; flex-shrink: 0;
+    }
+
+    /* Flavour chips */
+    .flavour-families { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .flavour-family-btn {
+      padding: 7px 12px; border-radius: 50px;
+      border: 1.5px solid var(--divider);
+      background: var(--paper); color: var(--mid);
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .flavour-family-btn.open {
+      background: var(--dark); color: var(--cream); border-color: var(--dark);
+    }
+    .flavour-specifics {
+      display: none; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+    }
+    .flavour-specifics.open { display: flex; }
+    .flavour-chip {
+      padding: 5px 10px; border-radius: 50px;
+      border: 1.5px solid var(--divider);
+      background: var(--paper); color: var(--mid);
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .flavour-chip.selected {
+      background: var(--accent); border-color: var(--accent); color: var(--dark);
+    }
+    .flavour-selected-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .flavour-selected-tag {
+      padding: 4px 10px; border-radius: 50px;
+      background: rgba(201,168,76,0.12);
+      border: 1px solid rgba(201,168,76,0.3);
+      font-family: 'DM Mono', monospace; font-size: 0.55rem;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--brown); cursor: pointer;
+    }
+
+    /* Navigation between coffees */
+    .coffee-nav {
+      display: flex; gap: 10px; margin-top: 16px;
+    }
+    .btn-coffee-nav {
+      flex: 1; padding: 13px;
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border-radius: 50px; cursor: pointer; transition: all 0.2s;
+      border: 1.5px solid var(--divider);
+      background: var(--paper); color: var(--brown);
+    }
+    .btn-coffee-nav:hover { border-color: var(--brown); }
+    .btn-coffee-nav.primary {
+      background: #1a2319; color: #e8e4d9; border-color: #1a2319;
+    }
+    .btn-coffee-nav.primary:hover { background: #2d3b2d; border-color: #2d3b2d; }
+    .btn-coffee-nav:disabled { opacity: 0.3; pointer-events: none; }
+
+    /* Submit button */
+    .btn-submit-session {
+      width: 100%; padding: 15px; margin-top: 20px;
+      background: #1a2319; color: #e8e4d9;
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border: none; border-radius: 50px; cursor: pointer;
+      transition: all 0.2s; display: none;
+    }
+    .btn-submit-session:hover { background: #2d3b2d; }
+    .btn-submit-session.visible { display: block; }
+    .btn-submit-session:disabled { opacity: 0.45; pointer-events: none; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
+  <span class="nav-tag">Guest session</span>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-content">
+    <span class="page-header-tag" id="header-tag">Cupping session</span>
+    <h1 id="header-title">Loading <em>session...</em></h1>
+    <p class="page-header-sub" id="header-sub">Please wait</p>
+  </div>
+</div>
+
+<main>
+
+  <!-- Loading state -->
+  <div class="state-card" id="state-loading">
+    <span class="state-icon">☕</span>
+    <h2 class="state-title">Loading session...</h2>
+    <p class="state-body">Just a moment.</p>
+  </div>
+
+  <!-- Error state -->
+  <div class="state-card" id="state-error" style="display:none">
+    <span class="state-icon">⚠️</span>
+    <h2 class="state-title">Session not found</h2>
+    <p class="state-body">This link may be invalid or the session may have ended.</p>
+  </div>
+
+  <!-- Thank you state -->
+  <div class="state-card" id="state-thanks" style="display:none">
+    <span class="state-icon">✅</span>
+    <h2 class="state-title">Notes <em>submitted</em></h2>
+    <p class="state-body">Your tasting notes have been saved. Thanks for cupping!</p>
+  </div>
+
+  <!-- Name step -->
+  <div class="name-card" id="step-name" style="display:none">
+    <h2>What's your name?</h2>
+    <p>So the session host knows whose notes are whose.</p>
+    <div class="form-group">
+      <label class="form-label" for="guest-name">Your name</label>
+      <input type="text" id="guest-name" class="form-input" placeholder="e.g. Sarah" autocomplete="given-name" />
+    </div>
+    <button class="btn-coffee-nav primary" style="width:100%" onclick="startCupping()">Start cupping →</button>
+  </div>
+
+  <!-- Cupping step -->
+  <div id="step-cupping" style="display:none">
+    <div class="coffee-tabs" id="guest-coffee-tabs"></div>
+    <div id="guest-coffee-panels"></div>
+    <div class="coffee-nav" id="coffee-nav">
+      <button class="btn-coffee-nav" id="btn-prev" onclick="prevCoffee()">← Previous</button>
+      <button class="btn-coffee-nav primary" id="btn-next" onclick="nextCoffee()">Next →</button>
+    </div>
+    <button class="btn-submit-session" id="btn-submit" onclick="submitSession()">Submit my notes →</button>
+  </div>
+
+</main>
+
+<script>
+  // ── STATE ──
+  let sessionData    = null;  // full session row from Supabase
+  let guestName      = '';
+  let currentCoffee  = 0;
+  let guestCoffees   = [];    // array of { name, data: {} } matching host's coffees
+  let flavourPicks   = [];    // per-coffee flavour selections: array of arrays
+
+  const SCORE_ATTRS = ['Acidity','Body','Sweetness','Finish','Balance'];
+
+  const WHEEL = [
+    { id:'fruity',  emoji:'🍓', name:'Fruity',    specifics:['Blackberry','Raspberry','Blueberry','Strawberry','Lemon','Lime','Orange','Grapefruit','Peach','Apricot','Cherry','Mango','Pineapple','Passion Fruit','Raisin','Prune'] },
+    { id:'floral',  emoji:'🌸', name:'Floral',    specifics:['Jasmine','Rose','Lavender','Orange Blossom','Elderflower','Black Tea','Chamomile'] },
+    { id:'sweet',   emoji:'🍯', name:'Sweet',     specifics:['Vanilla','Cream','Caramel','Toffee','Honey','Brown Sugar','Maple Syrup','Dark Chocolate','Milk Chocolate','Cocoa'] },
+    { id:'nutty',   emoji:'🥜', name:'Nutty',     specifics:['Almond','Hazelnut','Peanut','Walnut','Pecan','Cocoa Powder'] },
+    { id:'spices',  emoji:'🌶', name:'Spices',    specifics:['Cinnamon','Cardamom','Nutmeg','Ginger','Clove','Pepper'] },
+    { id:'roasted', emoji:'🔥', name:'Roasted',   specifics:['Tobacco','Cedar','Smoky','Ashy','Dark Roast','Brown Roast'] },
+    { id:'green',   emoji:'🌿', name:'Green',     specifics:['Grassy','Vegetal','Olive Oil','Raw','Green Tea'] },
+    { id:'other',   emoji:'✨', name:'Other',     specifics:['Winey','Fermented','Musty','Earthy','Papery','Phenolic'] },
+  ];
+
+  // ── INIT ──
+  async function init() {
+    const params = new URLSearchParams(window.location.search);
+    const token  = params.get('token');
+
+    if (!token) { showError(); return; }
+
+    try {
+      // Fetch session using share token — no auth needed
+      const { data, error } = await window.supabaseClient
+        .from('cupping_sessions')
+        .select('session_name, coffees, params_active')
+        .eq('share_token', token)
+        .single();
+
+      if (error || !data) { showError(); return; }
+
+      sessionData = { ...data, token };
+
+      // Update header
+      document.getElementById('header-title').innerHTML = escHtml(data.session_name);
+      document.getElementById('header-sub').textContent = `${data.coffees.length} coffee${data.coffees.length > 1 ? 's' : ''} to taste`;
+      document.getElementById('header-tag').textContent = 'You\'ve been invited';
+
+      // Initialise guest coffees array
+      guestCoffees = data.coffees.map(c => ({ name: c.name, data: {} }));
+      flavourPicks = data.coffees.map(() => []);
+
+      // Hide loading, show name step
+      document.getElementById('state-loading').style.display = 'none';
+      document.getElementById('step-name').style.display = 'block';
+
+    } catch(e) {
+      console.error(e);
+      showError();
+    }
+  }
+
+  function showError() {
+    document.getElementById('state-loading').style.display = 'none';
+    document.getElementById('state-error').style.display = 'block';
+  }
+
+  // ── NAME STEP ──
+  function startCupping() {
+    const name = document.getElementById('guest-name').value.trim();
+    if (!name) {
+      document.getElementById('guest-name').focus();
+      return;
+    }
+    guestName = name;
+    document.getElementById('step-name').style.display = 'none';
+    buildCuppingView();
+    document.getElementById('step-cupping').style.display = 'block';
+  }
+
+  // ── BUILD CUPPING VIEW ──
+  function buildCuppingView() {
+    const params   = new Set(sessionData.params_active || []);
+    const coffees  = sessionData.coffees;
+
+    // Build tabs
+    document.getElementById('guest-coffee-tabs').innerHTML = coffees.map((c, i) => `
+      <button class="coffee-tab ${i === 0 ? 'active' : ''}" id="tab-${i}" onclick="switchCoffee(${i})">
+        ${escHtml(c.name)}
+      </button>`
+    ).join('');
+
+    // Build panels
+    document.getElementById('guest-coffee-panels').innerHTML = coffees.map((c, i) => `
+      <div class="coffee-panel ${i === 0 ? 'active' : ''}" id="panel-${i}">
+        ${buildPanel(i, params)}
+      </div>`
+    ).join('');
+
+    updateNav();
+  }
+
+  function buildPanel(idx, params) {
+    let html = `<div class="section-card">`;
+
+    // Scores
+    if (params.has('score')) {
+      html += `<span class="section-card-title">Scores</span>`;
+      SCORE_ATTRS.forEach(attr => {
+        html += `
+          <div class="score-row">
+            <span class="score-label">${attr}</span>
+            <input type="range" class="score-slider" min="1" max="10" step="0.5" value="7"
+              id="score-${idx}-${attr}"
+              oninput="document.getElementById('score-val-${idx}-${attr}').textContent=this.value" />
+            <span class="score-val" id="score-val-${idx}-${attr}">7</span>
+          </div>`;
+      });
+    }
+
+    // Flavours
+    if (params.has('flavours')) {
+      html += `<span class="section-card-title" style="margin-top:${params.has('score') ? '16px' : '0'};display:block">Flavour notes</span>`;
+      html += `<div class="flavour-families">`;
+      WHEEL.forEach(f => {
+        html += `<button class="flavour-family-btn" id="family-${idx}-${f.id}" onclick="toggleFamily(${idx},'${f.id}')">${f.emoji} ${f.name}</button>`;
+      });
+      html += `</div>`;
+      WHEEL.forEach(f => {
+        html += `<div class="flavour-specifics" id="specifics-${idx}-${f.id}">`;
+        f.specifics.forEach(s => {
+          html += `<button class="flavour-chip" id="chip-${idx}-${CSS.escape(s)}" onclick="toggleFlavour(${idx},'${s}')">${s}</button>`;
+        });
+        html += `</div>`;
+      });
+      html += `<div class="flavour-selected-wrap" id="selected-${idx}"></div>`;
+    }
+
+    // Notes
+    if (params.has('notes')) {
+      html += `
+        <div class="form-group" style="margin-top:${(params.has('score') || params.has('flavours')) ? '16px' : '0'}">
+          <label class="form-label">Tasting notes</label>
+          <textarea class="form-textarea" id="notes-${idx}" placeholder="Free-form impressions..."></textarea>
+        </div>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
+  // ── FLAVOUR WHEEL ──
+  function toggleFamily(coffeeIdx, familyId) {
+    const btn  = document.getElementById(`family-${coffeeIdx}-${familyId}`);
+    const list = document.getElementById(`specifics-${coffeeIdx}-${familyId}`);
+    const open = list.classList.toggle('open');
+    btn.classList.toggle('open', open);
+  }
+
+  function toggleFlavour(coffeeIdx, flavour) {
+    const picks = flavourPicks[coffeeIdx];
+    const idx   = picks.indexOf(flavour);
+    if (idx > -1) {
+      picks.splice(idx, 1);
+    } else {
+      picks.push(flavour);
+    }
+    // Update chip state
+    const chip = document.getElementById(`chip-${coffeeIdx}-${CSS.escape(flavour)}`);
+    if (chip) chip.classList.toggle('selected', picks.includes(flavour));
+    // Update selected tags
+    renderSelectedFlavours(coffeeIdx);
+  }
+
+  function renderSelectedFlavours(coffeeIdx) {
+    const wrap = document.getElementById(`selected-${coffeeIdx}`);
+    if (!wrap) return;
+    wrap.innerHTML = flavourPicks[coffeeIdx].map(f =>
+      `<span class="flavour-selected-tag" onclick="toggleFlavour(${coffeeIdx},'${f}')">${escHtml(f)} ✕</span>`
+    ).join('');
+  }
+
+  // ── COFFEE NAVIGATION ──
+  function switchCoffee(idx) {
+    saveCurrentCoffeeData();
+    currentCoffee = idx;
+    document.querySelectorAll('.coffee-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+    document.querySelectorAll('.coffee-panel').forEach((p, i) => p.classList.toggle('active', i === idx));
+    updateNav();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function prevCoffee() { if (currentCoffee > 0) switchCoffee(currentCoffee - 1); }
+
+  function nextCoffee() {
+    const total = sessionData.coffees.length;
+    if (currentCoffee < total - 1) switchCoffee(currentCoffee + 1);
+  }
+
+  function updateNav() {
+    const total = sessionData.coffees.length;
+    document.getElementById('btn-prev').disabled = currentCoffee === 0;
+    document.getElementById('btn-next').disabled = currentCoffee === total - 1;
+    // Show submit button on last coffee
+    document.getElementById('btn-submit').classList.toggle('visible', currentCoffee === total - 1);
+  }
+
+  // Reads current panel data into guestCoffees state
+  function saveCurrentCoffeeData() {
+    const idx    = currentCoffee;
+    const params = new Set(sessionData.params_active || []);
+    const data   = {};
+
+    if (params.has('score')) {
+      const scores = {};
+      SCORE_ATTRS.forEach(attr => {
+        const el = document.getElementById(`score-${idx}-${attr}`);
+        if (el) scores[attr] = parseFloat(el.value);
+      });
+      data.scores = scores;
+    }
+
+    if (params.has('flavours')) {
+      data.flavours = [...flavourPicks[idx]];
+    }
+
+    if (params.has('notes')) {
+      const el = document.getElementById(`notes-${idx}`);
+      if (el) data.notes = el.value.trim();
+    }
+
+    guestCoffees[idx].data = data;
+  }
+
+  // ── SUBMIT ──
+  async function submitSession() {
+    saveCurrentCoffeeData();
+
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const { error } = await window.supabaseClient
+        .from('session_responses')
+        .insert({
+          share_token: sessionData.token,
+          guest_name:  guestName,
+          coffees:     guestCoffees,
+        });
+
+      if (error) {
+        console.error('Error submitting:', error.message);
+        btn.disabled = false;
+        btn.textContent = 'Submit my notes →';
+        alert('Something went wrong. Please try again.');
+        return;
+      }
+
+      // Show thank you
+      document.getElementById('step-cupping').style.display = 'none';
+      document.getElementById('state-thanks').style.display = 'block';
+      document.querySelector('.page-header h1').innerHTML = 'Notes <em>submitted</em>';
+      document.getElementById('header-sub').textContent = 'Thanks for cupping!';
+
+    } catch(e) {
+      console.error(e);
+      btn.disabled = false;
+      btn.textContent = 'Submit my notes →';
+      alert('Something went wrong. Please try again.');
+    }
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>

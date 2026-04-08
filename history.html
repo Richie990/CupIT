@@ -596,7 +596,7 @@
   async function loadSessions(userId) {
     const { data, error } = await window.supabaseClient
       .from('cupping_sessions')
-      .select('id, session_name, session_date, coffees, params_active, timer_enabled')
+      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token')
       .eq('user_id', userId)
       .order('id', { ascending: false });
 
@@ -608,10 +608,11 @@
 
     // Map DB rows to the shape used throughout history.html
     sessions = (data || []).map(s => ({
-      id:      s.id,
-      name:    s.session_name,
-      date:    s.session_date,
-      coffees: s.coffees || [],
+      id:          s.id,
+      name:        s.session_name,
+      date:        s.session_date,
+      coffees:     s.coffees || [],
+      shareToken:  s.share_token || null,
     }));
 
     // Update session count in header
@@ -804,13 +805,12 @@
   //  DRAWER
   //  Slides in from the right to show full session detail.
   // ══════════════════════════════════════════════════════════
-  function openDrawer(id) {
+  async function openDrawer(id) {
     const session = sessions.find(s => s.id === id);
     if (!session) return;
 
     activeDrawerId = id;
 
-    // Track when a user opens a session detail drawer
     track('session_detail_opened', {
       session_id: id,
       coffee_count: session.coffees.length,
@@ -825,8 +825,9 @@
     document.getElementById('drawer-meta').textContent  =
       `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''}`;
 
-    // Build drawer body — one card per coffee
-    let html = '';
+    // Build drawer body — host's coffees first
+    let html = `<span style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:14px">Your notes</span>`;
+
     session.coffees.forEach((c, i) => {
       const d      = c.data;
       const scores = d.scores || {};
@@ -838,14 +839,12 @@
           ${avg !== null ? `<span class="drawer-score-badge">${avg.toFixed(1)}</span>` : ''}
         </div>`;
 
-      // Metadata rows
       if (d.origin)  html += drawerRow('Origin',  d.origin);
       if (d.roaster) html += drawerRow('Roaster', d.roaster);
       if (d.process) html += drawerRow('Process', d.process);
       if (d.roast)   html += drawerRow('Roast',   d.roast);
       if (d.brew)    html += drawerRow('Method',  d.brew);
 
-      // Score bars
       if (Object.keys(scores).length) {
         html += `<div class="drawer-divider"></div>
           <span class="drawer-section-label">Scores</span>
@@ -861,7 +860,6 @@
           </div>`;
       }
 
-      // Flavour tags
       if (d.flavours?.length) {
         html += `<div class="drawer-divider"></div>
           <span class="drawer-section-label">Flavour notes</span>
@@ -870,7 +868,6 @@
           </div>`;
       }
 
-      // Free-text notes
       if (d.notes) {
         html += `<div class="drawer-divider"></div>
           <span class="drawer-section-label">Tasting notes</span>
@@ -882,9 +879,86 @@
 
     document.getElementById('drawer-body').innerHTML = html;
 
-    // Open drawer and overlay
+    // Open drawer immediately so host sees their notes straight away
     document.getElementById('drawer').classList.add('open');
     document.getElementById('drawer-overlay').classList.add('open');
+
+    // Fetch guest responses in the background and append if any exist
+    if (session.shareToken) {
+      try {
+        const { data: responses, error } = await window.supabaseClient
+          .from('session_responses')
+          .select('guest_name, coffees, created_at')
+          .eq('share_token', session.shareToken)
+          .order('created_at', { ascending: true });
+
+        if (!error && responses && responses.length > 0) {
+          let guestHtml = `
+            <div style="margin-top:24px;padding-top:20px;border-top:2px solid var(--divider)">
+              <span style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:14px">
+                Guest responses (${responses.length})
+              </span>`;
+
+          responses.forEach(r => {
+            guestHtml += `
+              <div style="margin-bottom:20px">
+                <p style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--brown);font-weight:500;margin-bottom:12px">
+                  ${escHtml(r.guest_name)}
+                </p>`;
+
+            r.coffees.forEach(c => {
+              const d      = c.data || {};
+              const scores = d.scores || {};
+              const avg    = avgScore(scores);
+
+              guestHtml += `<div class="drawer-coffee">
+                <div class="drawer-coffee-header">
+                  <span class="drawer-coffee-name">${escHtml(c.name)}</span>
+                  ${avg !== null ? `<span class="drawer-score-badge">${avg.toFixed(1)}</span>` : ''}
+                </div>`;
+
+              if (Object.keys(scores).length) {
+                guestHtml += `<div class="drawer-score-bars" style="margin-top:8px">
+                  ${Object.entries(scores).map(([attr, val]) => `
+                    <div class="score-bar-row">
+                      <span class="score-bar-label">${attr}</span>
+                      <div class="score-bar-track">
+                        <div class="score-bar-fill" style="width:${(val/10)*100}%"></div>
+                      </div>
+                      <span class="score-bar-val">${val}</span>
+                    </div>`).join('')}
+                </div>`;
+              }
+
+              if (d.flavours?.length) {
+                guestHtml += `<div class="drawer-divider"></div>
+                  <span class="drawer-section-label">Flavour notes</span>
+                  <div class="drawer-flavour-tags">
+                    ${d.flavours.map(f => `<span class="drawer-flavour-tag">${escHtml(f)}</span>`).join('')}
+                  </div>`;
+              }
+
+              if (d.notes) {
+                guestHtml += `<div class="drawer-divider"></div>
+                  <span class="drawer-section-label">Tasting notes</span>
+                  <p style="font-size:0.85rem;color:var(--mid);font-style:italic;line-height:1.65">${escHtml(d.notes)}</p>`;
+              }
+
+              guestHtml += `</div>`;
+            });
+
+            guestHtml += `</div>`;
+          });
+
+          guestHtml += `</div>`;
+
+          // Append guest responses to drawer
+          document.getElementById('drawer-body').innerHTML += guestHtml;
+        }
+      } catch(e) {
+        console.error('Error fetching guest responses:', e.message);
+      }
+    }
   }
 
   function closeDrawer() {

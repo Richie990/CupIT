@@ -337,6 +337,7 @@
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="config.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.json" />
@@ -401,6 +402,38 @@
 
   <div class="action-bar">
     <div class="action-bar-inner">
+      <button class="btn-primary-action" onclick="goToShare()">Generate invite →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ SHARE ══ -->
+<div class="view" id="view-share">
+  <div class="view-inner">
+    <p class="view-title" style="margin-bottom:6px">Invite guests</p>
+    <p class="view-sub">Share this QR code or link so guests can join the session on their device. They don't need an account.</p>
+
+    <div class="section-card" style="text-align:center;margin-top:20px">
+      <div id="qr-code" style="display:flex;justify-content:center;margin-bottom:16px"></div>
+      <p style="font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);margin-bottom:8px">Or copy the link</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="share-link" type="text" readonly
+          style="flex:1;padding:10px 14px;background:var(--bg);border:1.5px solid var(--divider);border-radius:10px;font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--brown);outline:none" />
+        <button onclick="copyLink()" style="padding:10px 16px;background:var(--dark);color:var(--cream);border:none;border-radius:10px;font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap" id="copy-btn">Copy</button>
+      </div>
+    </div>
+
+    <div class="section-card" style="margin-top:12px">
+      <p style="font-size:0.82rem;color:var(--mid);line-height:1.7">
+        Guests can fill in their scores and notes at any time while the link is active.
+        The link stays open until you end the session from your history page.
+      </p>
+    </div>
+  </div>
+  <div class="action-bar">
+    <div class="action-bar-inner">
+      <button class="btn-back-action" onclick="goTo('setup')">←</button>
       <button class="btn-primary-action" onclick="startCupping()">Start cupping →</button>
     </div>
   </div>
@@ -533,6 +566,7 @@
   let activeParams = new Set(['flavours','score','notes']);
 
   let currentView = 'setup'; // tracks which view is showing
+  let shareToken   = null;    // generated when setup completes, used for guest QR code
 
   let useTimer = false; // whether the user enabled the steep timer in setup
 
@@ -1007,8 +1041,8 @@
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + view).classList.add('active');
     currentView = view;
-    // Phase bar: setup=1, cupping=2, review/saved=3
-    const map = { setup:1, cupping:2, review:3, saved:3 };
+    // Phase bar: setup=1, share=1, cupping=2, review/saved=3
+    const map = { setup:1, share:1, cupping:2, review:3, saved:3 };
     const active = map[view]||1;
     [1,2,3].forEach(n => {
       document.getElementById('phase-'+n).classList.toggle('active', n===active);
@@ -1044,6 +1078,7 @@
         coffees:       coffees,
         params_active: [...activeParams],
         timer_enabled: useTimer,
+        share_token:   shareToken,
       });
 
     if (error) {
@@ -1057,10 +1092,47 @@
     goTo('saved');
   }
 
-  // Resets all state completely and returns to setup.
+  // Generates a share token, saves it to Supabase, then shows the share view
+  async function goToShare() {
+    const named = coffees.filter(c => c.name.trim());
+    if (!named.length) {
+      document.querySelector('.coffee-entry-input')?.focus();
+      return;
+    }
+
+    // Generate a random token if we don't have one yet
+    if (!shareToken) {
+      shareToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    }
+
+    const joinUrl = `https://richie990.github.io/CupIT/join.html?token=${shareToken}`;
+
+    // Populate the share link input
+    document.getElementById('share-link').value = joinUrl;
+
+    // Generate QR code
+    const qrContainer = document.getElementById('qr-code');
+    qrContainer.innerHTML = '';
+    QRCode.toCanvas(joinUrl, { width: 200, margin: 2, color: { dark: '#1a2319', light: '#f0ede5' } }, (err, canvas) => {
+      if (!err) qrContainer.appendChild(canvas);
+    });
+
+    goTo('share');
+  }
+
+  // Copies the share link to clipboard
+  function copyLink() {
+    const link = document.getElementById('share-link').value;
+    navigator.clipboard.writeText(link).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
   // Called from "Start a new session" on the saved screen.
   function resetAll() {
     coffees = [];
+    shareToken = null;
     activeParams = new Set(['flavours','score','notes']);
     useTimer = false;
     clearInterval(timerInterval);
