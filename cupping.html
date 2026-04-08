@@ -1052,15 +1052,13 @@
   }
 
   // Saves the session to Supabase cupping_sessions table.
+  // If a placeholder row was already created in goToShare(), updates it.
+  // Otherwise inserts a fresh row (solo session with no guests).
   async function saveSession() {
     const name = document.getElementById('session-name').value.trim() || 'Untitled session';
 
-    // Get current authenticated user
     const { data: { session } } = await window.supabaseClient.auth.getSession();
-    if (!session) {
-      window.location.href = 'signup.html';
-      return;
-    }
+    if (!session) { window.location.href = 'signup.html'; return; }
 
     track('session_saved', {
       coffee_count: coffees.length,
@@ -1068,18 +1066,34 @@
       total_flavours: coffees.reduce((n, c) => n + (c.data.flavours?.length || 0), 0),
     });
 
-    // Insert into cupping_sessions — coffees array stored as JSONB
-    const { error } = await window.supabaseClient
-      .from('cupping_sessions')
-      .insert({
-        user_id:       session.user.id,
-        session_name:  name,
-        session_date:  new Date().toISOString().split('T')[0],
-        coffees:       coffees,
-        params_active: [...activeParams],
-        timer_enabled: useTimer,
-        share_token:   shareToken,
-      });
+    let error;
+
+    if (shareToken) {
+      // Update the placeholder row created in goToShare
+      ({ error } = await window.supabaseClient
+        .from('cupping_sessions')
+        .update({
+          session_name:  name,
+          coffees:       coffees,
+          params_active: [...activeParams],
+          timer_enabled: useTimer,
+        })
+        .eq('share_token', shareToken)
+        .eq('user_id', session.user.id));
+    } else {
+      // Solo session — no guests, insert fresh
+      ({ error } = await window.supabaseClient
+        .from('cupping_sessions')
+        .insert({
+          user_id:       session.user.id,
+          session_name:  name,
+          session_date:  new Date().toISOString().split('T')[0],
+          coffees:       coffees,
+          params_active: [...activeParams],
+          timer_enabled: useTimer,
+          share_token:   null,
+        }));
+    }
 
     if (error) {
       console.error('Error saving session:', error.message);
@@ -1092,7 +1106,8 @@
     goTo('saved');
   }
 
-  // Generates a share token, saves it to Supabase, then shows the share view
+  // Generates a share token, inserts a placeholder session row so guests
+  // can join immediately, then shows the share view with QR code.
   async function goToShare() {
     const named = coffees.filter(c => c.name.trim());
     if (!named.length) {
@@ -1100,9 +1115,33 @@
       return;
     }
 
+    // Get current authenticated user
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) { window.location.href = 'signup.html'; return; }
+
     // Generate a random token if we don't have one yet
     if (!shareToken) {
       shareToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+
+      // Insert a placeholder row so guests can find the session immediately
+      const { error } = await window.supabaseClient
+        .from('cupping_sessions')
+        .insert({
+          user_id:       session.user.id,
+          session_name:  'In progress...',
+          session_date:  new Date().toISOString().split('T')[0],
+          coffees:       coffees.filter(c => c.name.trim()),
+          params_active: [...activeParams],
+          timer_enabled: useTimer,
+          share_token:   shareToken,
+        });
+
+      if (error) {
+        console.error('Error creating session:', error.message);
+        alert('There was a problem creating the session. Please try again.');
+        shareToken = null;
+        return;
+      }
     }
 
     const joinUrl = `https://richie990.github.io/CupIT/join.html?token=${shareToken}`;
