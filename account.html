@@ -256,9 +256,9 @@
     <!-- Step 2: OTP entry (hidden until code is sent) -->
     <div id="delete-step-2" style="display:none">
       <p style="font-size:0.85rem;color:var(--mid);line-height:1.65;margin-bottom:14px">
-        A 6-digit confirmation code has been sent to your email address. Enter it below to permanently delete your account.
+        An 8-digit confirmation code has been sent to your email address. Enter it below to permanently delete your account.
       </p>
-      <input type="text" id="otp-input" maxlength="6" placeholder="000000"
+      <input type="text" id="otp-input" maxlength="8" placeholder="00000000"
         style="width:100%;padding:13px 16px;background:var(--bg);border:1.5px solid var(--divider);border-radius:var(--r);font-family:'DM Mono',monospace;font-size:1.2rem;letter-spacing:0.3em;text-align:center;color:var(--brown);outline:none;margin-bottom:10px"
         oninput="this.value=this.value.replace(/[^0-9]/g,'')"
         onfocus="this.style.borderColor='var(--accent)'"
@@ -443,8 +443,8 @@
     const status = document.getElementById('delete-status');
     const btn    = document.getElementById('btn-confirm-delete');
 
-    if (code.length !== 6) {
-      status.textContent = 'Please enter the 6-digit code from your email.';
+    if (code.length !== 8) {
+      status.textContent = 'Please enter the 8-digit code from your email.';
       status.className   = 'status-msg error';
       return;
     }
@@ -458,7 +458,7 @@
       const { data: { session } } = await window.supabaseClient.auth.getSession();
       if (!session) { window.location.href = 'signup.html'; return; }
 
-      // Verify the OTP
+      // Verify the OTP — type must be 'reauthentication' for reauth codes
       const { error: verifyError } = await window.supabaseClient.auth.verifyOtp({
         email: session.user.email,
         token: code,
