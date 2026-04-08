@@ -282,15 +282,20 @@
   // ── AUTH CHECK ──
   async function init() {
     const params = new URLSearchParams(window.location.search);
-    const isDeleteReturn = params.get('delete') === '1' && sessionStorage.getItem('pending_delete');
+    const isDeleteReturn = params.get('delete') === '1';
 
     if (isDeleteReturn) {
       // Wait for Supabase to process the magic link and establish the session
       window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
           await completeDelete();
         }
       });
+      // Also try immediately in case session is already established
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (session) {
+        await completeDelete();
+      }
       return;
     }
 
@@ -422,9 +427,6 @@
       const { data: { user } } = await window.supabaseClient.auth.getUser();
       if (!user) { window.location.href = 'signup.html'; return; }
 
-      // Store a flag so we know to delete on return
-      sessionStorage.setItem('pending_delete', '1');
-
       // Send magic link — user clicks it and lands back here with a valid session
       const { error } = await window.supabaseClient.auth.signInWithOtp({
         email:   user.email,
@@ -436,7 +438,7 @@
 
       if (error) {
         console.error('Magic link error:', error.message);
-        sessionStorage.removeItem('pending_delete');
+        localStorage.removeItem('pending_delete');
         status.textContent = 'Could not send link. Please try again.';
         status.className   = 'status-msg error';
         btn.disabled       = false;
@@ -452,7 +454,7 @@
 
     } catch(e) {
       console.error('Magic link error:', e);
-      sessionStorage.removeItem('pending_delete');
+      localStorage.removeItem('pending_delete');
       status.textContent = 'Something went wrong. Please try again.';
       status.className   = 'status-msg error';
       btn.disabled       = false;
@@ -474,11 +476,9 @@
         console.error('Delete error:', error.message);
         status.textContent = 'Something went wrong. Please contact us to delete your account.';
         status.className   = 'status-msg error';
-        sessionStorage.removeItem('pending_delete');
         return;
       }
 
-      sessionStorage.removeItem('pending_delete');
       await window.supabaseClient.auth.signOut();
       window.location.href = 'index.html';
 
@@ -486,13 +486,12 @@
       console.error('Delete error:', e);
       status.textContent = 'Something went wrong. Please contact us to delete your account.';
       status.className   = 'status-msg error';
-      sessionStorage.removeItem('pending_delete');
+      localStorage.removeItem('pending_delete');
     }
   }
 
   // Cancels and resets back to the initial delete button.
   function cancelDelete() {
-    sessionStorage.removeItem('pending_delete');
     document.getElementById('delete-step-1').style.display = 'block';
     document.getElementById('delete-step-2').style.display = 'none';
     document.getElementById('btn-delete').disabled    = false;
