@@ -250,22 +250,16 @@
 
     <!-- Step 1: initial delete button -->
     <div id="delete-step-1">
-      <button class="btn-action btn-delete" id="btn-delete" onclick="requestDeleteCode()">Delete my account</button>
+      <button class="btn-action btn-delete" id="btn-delete" onclick="requestDeleteLink()">Delete my account</button>
     </div>
 
-    <!-- Step 2: OTP entry (hidden until code is sent) -->
+    <!-- Step 2: waiting for email confirmation -->
     <div id="delete-step-2" style="display:none">
       <p style="font-size:0.85rem;color:var(--mid);line-height:1.65;margin-bottom:14px">
-        An 8-digit confirmation code has been sent to your email address. Enter it below to permanently delete your account.
+        A confirmation link has been sent to your email address. Click the link in the email to permanently delete your account.
       </p>
-      <input type="text" id="otp-input" maxlength="8" placeholder="00000000"
-        style="width:100%;padding:13px 16px;background:var(--bg);border:1.5px solid var(--divider);border-radius:var(--r);font-family:'DM Mono',monospace;font-size:1.2rem;letter-spacing:0.3em;text-align:center;color:var(--brown);outline:none;margin-bottom:10px"
-        oninput="this.value=this.value.replace(/[^0-9]/g,'')"
-        onfocus="this.style.borderColor='var(--accent)'"
-        onblur="this.style.borderColor='var(--divider)'" />
-      <button class="btn-action btn-delete" id="btn-confirm-delete" onclick="confirmDelete()">Confirm deletion</button>
       <button class="btn-action" onclick="cancelDelete()"
-        style="background:transparent;border:1.5px solid var(--divider);color:var(--mid);margin-top:8px">
+        style="background:transparent;border:1.5px solid var(--divider);color:var(--mid)">
         Cancel
       </button>
     </div>
@@ -289,6 +283,14 @@
   async function init() {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session) { window.location.href = 'signup.html'; return; }
+
+    // If user has returned via the delete confirmation magic link, complete deletion
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('delete') === '1' && sessionStorage.getItem('pending_delete')) {
+      await completeDelete();
+      return;
+    }
+
     loadProfile(session.user);
   }
 
@@ -393,42 +395,59 @@
   }
 
   // ── DELETE ACCOUNT — STEP 1 ──
-  // Sends a reauthentication OTP email and shows the code entry step.
-  async function requestDeleteCode() {
+  // ── DELETE ACCOUNT — STEP 1 ──
+  // Sends a magic link to the user's email. When they click it they
+  // land back on this page with a fresh session and deletion completes.
+  async function requestDeleteLink() {
     const confirmed = confirm(
       'Are you sure you want to permanently delete your account?\n\n' +
       'All your cupping sessions, profile data and account will be deleted. ' +
-      'This cannot be undone.\n\nA confirmation code will be sent to your email.'
+      'This cannot be undone.\n\nA confirmation link will be sent to your email.'
     );
     if (!confirmed) return;
 
     const btn    = document.getElementById('btn-delete');
     const status = document.getElementById('delete-status');
-    btn.disabled = true;
-    btn.textContent = 'Sending code...';
+    btn.disabled    = true;
+    btn.textContent = 'Sending link...';
     status.textContent = '';
-    status.className = 'status-msg';
+    status.className   = 'status-msg';
 
     try {
-      const { error } = await window.supabaseClient.auth.reauthenticate();
+      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      if (!user) { window.location.href = 'signup.html'; return; }
+
+      // Store a flag so we know to delete on return
+      sessionStorage.setItem('pending_delete', '1');
+
+      // Send magic link — user clicks it and lands back here with a valid session
+      const { error } = await window.supabaseClient.auth.signInWithOtp({
+        email:   user.email,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo:  'https://richie990.github.io/CupIT/account.html?delete=1',
+        },
+      });
+
       if (error) {
-        console.error('Reauth error:', error.message);
-        status.textContent = 'Could not send code. Please try again.';
+        console.error('Magic link error:', error.message);
+        sessionStorage.removeItem('pending_delete');
+        status.textContent = 'Could not send link. Please try again.';
         status.className   = 'status-msg error';
         btn.disabled       = false;
         btn.textContent    = 'Delete my account';
         return;
       }
 
-      // Show OTP entry step
+      // Show waiting state
       document.getElementById('delete-step-1').style.display = 'none';
       document.getElementById('delete-step-2').style.display = 'block';
-      status.textContent = 'Code sent — check your inbox.';
+      status.textContent = 'Link sent — check your inbox.';
       status.className   = 'status-msg success';
-      setTimeout(() => document.getElementById('otp-input').focus(), 100);
 
     } catch(e) {
-      console.error('Reauth error:', e);
+      console.error('Magic link error:', e);
+      sessionStorage.removeItem('pending_delete');
       status.textContent = 'Something went wrong. Please try again.';
       status.className   = 'status-msg error';
       btn.disabled       = false;
@@ -436,58 +455,25 @@
     }
   }
 
-  // ── DELETE ACCOUNT — STEP 2 ──
-  // Verifies the OTP then deletes the account.
-  async function confirmDelete() {
-    const code   = document.getElementById('otp-input').value.trim();
+  // ── DELETE ACCOUNT — COMPLETION ──
+  // Called on page load when the user returns via the magic link.
+  async function completeDelete() {
     const status = document.getElementById('delete-status');
-    const btn    = document.getElementById('btn-confirm-delete');
-
-    if (code.length !== 8) {
-      status.textContent = 'Please enter the 8-digit code from your email.';
-      status.className   = 'status-msg error';
-      return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'Verifying...';
-    status.textContent = '';
-    status.className = 'status-msg';
+    status.textContent = 'Deleting your account...';
+    status.className   = 'status-msg';
 
     try {
-      const { data: { session } } = await window.supabaseClient.auth.getSession();
-      if (!session) { window.location.href = 'signup.html'; return; }
+      const { error } = await window.supabaseClient.rpc('delete_user');
 
-      // Verify the OTP — type must be 'reauthentication' for reauth codes
-      const { error: verifyError } = await window.supabaseClient.auth.verifyOtp({
-        email: session.user.email,
-        token: code,
-        type:  'reauthentication',
-      });
-
-      if (verifyError) {
-        console.error('OTP verify error:', verifyError.message);
-        status.textContent = 'Incorrect or expired code. Please try again.';
-        status.className   = 'status-msg error';
-        btn.disabled       = false;
-        btn.textContent    = 'Confirm deletion';
-        return;
-      }
-
-      // OTP verified — delete the account via RPC
-      btn.textContent = 'Deleting...';
-      const { error: deleteError } = await window.supabaseClient.rpc('delete_user');
-
-      if (deleteError) {
-        console.error('Delete error:', deleteError.message);
+      if (error) {
+        console.error('Delete error:', error.message);
         status.textContent = 'Something went wrong. Please contact us to delete your account.';
         status.className   = 'status-msg error';
-        btn.disabled       = false;
-        btn.textContent    = 'Confirm deletion';
+        sessionStorage.removeItem('pending_delete');
         return;
       }
 
-      // Sign out and redirect to home
+      sessionStorage.removeItem('pending_delete');
       await window.supabaseClient.auth.signOut();
       window.location.href = 'index.html';
 
@@ -495,20 +481,19 @@
       console.error('Delete error:', e);
       status.textContent = 'Something went wrong. Please contact us to delete your account.';
       status.className   = 'status-msg error';
-      btn.disabled       = false;
-      btn.textContent    = 'Confirm deletion';
+      sessionStorage.removeItem('pending_delete');
     }
   }
 
-  // Cancels the OTP step and resets back to the initial delete button.
+  // Cancels and resets back to the initial delete button.
   function cancelDelete() {
+    sessionStorage.removeItem('pending_delete');
     document.getElementById('delete-step-1').style.display = 'block';
     document.getElementById('delete-step-2').style.display = 'none';
-    document.getElementById('otp-input').value = '';
-    document.getElementById('btn-delete').disabled = false;
+    document.getElementById('btn-delete').disabled    = false;
     document.getElementById('btn-delete').textContent = 'Delete my account';
     document.getElementById('delete-status').textContent = '';
-    document.getElementById('delete-status').className = 'status-msg';
+    document.getElementById('delete-status').className   = 'status-msg';
   }
 
   // ── SIGN OUT ──
