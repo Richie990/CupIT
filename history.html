@@ -609,6 +609,11 @@
 <script>
   // Track page view on load
   track('page_view', { page: 'history' });
+  // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
+  window.supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') window.location.href = 'index.html';
+  });
+
 
   // ══════════════════════════════════════════════════════════
   //  STATE
@@ -631,6 +636,11 @@
     }
 
     track('page_view', { page: 'history' });
+  // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
+  window.supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') window.location.href = 'index.html';
+  });
+
 
     await loadSessions(session.user.id);
     populateRoasterFilter();

@@ -396,6 +396,11 @@
     if (!session) return;
 
     track('page_view', { page: 'dashboard' });
+  // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
+  window.supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') window.location.href = 'index.html';
+  });
+
 
     setGreeting();
     await loadUser(session.user.id);

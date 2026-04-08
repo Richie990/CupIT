@@ -501,6 +501,11 @@
 <script>
   // Track page view on load
   track('page_view', { page: 'cupping' });
+  // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
+  window.supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') window.location.href = 'index.html';
+  });
+
 
   // ══════════════════════════════════════════════════════════
   //  DATA DEFINITIONS
@@ -583,6 +588,11 @@
         return;
       }
       track('page_view', { page: 'cupping' });
+  // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
+  window.supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') window.location.href = 'index.html';
+  });
+
     } catch(e) {
       console.warn('Auth check failed, continuing anyway:', e.message);
     }
