@@ -254,7 +254,7 @@
       color: var(--brown);
     }
 
-    /* Score badge — colour coded */
+
     .score-pill {
       display: inline-flex; align-items: center; justify-content: center;
       width: 36px; height: 36px; border-radius: 50%;
@@ -425,7 +425,7 @@
     .drawer-val { color: var(--brown); }
     .drawer-val.italic { font-style: italic; color: var(--mid); }
 
-    /* Score bars in drawer */
+
     .drawer-score-bars { margin-top: 10px; }
     .score-bar-row {
       display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
@@ -541,7 +541,7 @@
   <input type="date" class="filter-input" id="filter-date-to"
     title="To date" onchange="renderTable()" />
 
-  <!-- Filter by score range -->
+
 
   <button class="btn-clear-filters" onclick="clearFilters()">Clear filters</button>
 </div>
@@ -723,7 +723,6 @@
       if (dateFrom && s.date < dateFrom) return false;
       if (dateTo   && s.date > dateTo)   return false;
 
-      // Score range filter: session's average score must fall within range
       if (avg !== null) {
         if (scoreMin !== null && avg < scoreMin) return false;
         if (scoreMax !== null && avg > scoreMax) return false;
@@ -752,7 +751,7 @@
   //  SORTING
   // ══════════════════════════════════════════════════════════
   function setSort(col) {
-    // Toggle direction if same column, otherwise default to descending for date/score
+    // Toggle direction if same column, otherwise default to descending for date
     track('history_sorted', { column: col });
     if (sortCol === col) {
       sortAsc = !sortAsc;
@@ -1035,10 +1034,7 @@
   //  UTILITIES
   // ══════════════════════════════════════════════════════════
 
-  // Average score across all coffees in a session.
-  // Returns null if no scores have been entered.
 
-  // Average score across all attributes for a single coffee.
 
   // Formats an ISO date string (YYYY-MM-DD) for display.
   function formatDate(iso) {

@@ -5,90 +5,74 @@
   ═══════════════════════════════════════════════════════════════
 
   PURPOSE:
-    The core logged cupping experience for experienced users.
-    Allows a user to set up a session, cup multiple coffees
-    side by side, and save the full session at the end.
-    This is a front-end prototype — saving currently shows a
-    confirmation screen but does not persist to a database yet.
+    The core cupping experience. Allows a user to set up a session,
+    cup multiple coffees side by side, invite guests via QR code,
+    and save the full session to Supabase at the end.
 
-  THREE-PHASE FLOW:
+  FOUR-PHASE FLOW:
     PHASE 1 — SETUP
-      User names the session, adds coffees (by name), and
-      selects which data fields they want to capture for this
-      session. Fields are optional because sometimes you just
-      want to cup quickly and don't need everything.
+      User names the session, adds coffees (by name), and selects
+      which data fields they want to capture. Fields are optional.
       Optionally enables a built-in steep timer.
 
+    PHASE 1b — SHARE (optional)
+      User can generate a QR code / invite link for guests.
+      A placeholder session row is immediately inserted into
+      cupping_sessions with is_active=true so guests can join
+      before the host has finished cupping.
+
     PHASE 2 — CUPPING
-      One coffee is shown at a time. User flips between coffees
-      via tabs. They can return to any coffee at any point —
-      important because flavour changes as coffee cools.
-      If timer was enabled, a collapsible countdown appears above
-      the tabs. A dot on each tab indicates notes have been added.
+      One coffee shown at a time via tabs. User can return to any
+      coffee at any point. A dot on each tab shows notes added.
+      Collapsible countdown timer if enabled.
 
     PHASE 3 — REVIEW & SAVE
-      Summary of all coffees with their data. Score fields show
-      an average badge. One save button commits the session.
+      Summary of all coffees. One save button updates the session
+      row in Supabase with final data and sets is_active=false.
 
   KEY DATA STRUCTURES:
     ALL_PARAMS[]   Defines every possible field. Each param has:
-                   id, label, type (text/select/scores/flavours/textarea),
+                   id, label, type (text/select/flavours/textarea),
                    and options or placeholder where relevant.
-                   To add a new field type, add it here and handle
-                   it in buildPanelFields().
 
     WHEEL[]        Flavour wheel data. Each family has an id, emoji,
                    name, and array of specific flavour chips.
-                   To add flavours, add strings to the specifics array.
-                   To add a new family, add an object to WHEEL[].
-
-    SCORE_ATTRS[]  The attributes shown in the score slider block.
-                   Add or remove strings here to change what's scored.
 
     coffees[]      Runtime array of { name, data:{} } objects.
-                   data holds everything the user enters for that coffee
-                   (keyed by param id, plus 'scores' and 'flavours').
+                   data holds everything entered for that coffee
+                   (keyed by param id, plus 'flavours' array).
 
-    activeParams   A Set of param ids the user toggled on in setup.
-                   Only params in this set are rendered in the panels.
+    activeParams   A Set of param ids toggled on in setup.
+                   Only params in this set are rendered in panels.
+
+    shareToken     Random token generated in goToShare(). Used to
+                   link the session row to guest responses.
 
   KEY FUNCTIONS:
-    init()              Builds the param grid and seeds two blank coffees.
+    init()              Auth check, builds param grid, seeds two coffees.
     buildParamGrid()    Renders the toggle checkboxes in setup.
     addCoffee()         Adds a blank coffee entry to coffees[].
-    startCupping()      Validates, filters unnamed coffees, builds
-                        the cupping panels, shows timer if enabled.
+    goToShare()         Generates QR code, inserts placeholder session row.
+    startCupping()      Validates setup and transitions to cupping phase.
     buildCuppingView()  Renders all coffee tabs and their panels.
-    buildPanelFields(ci) Renders only the active param fields for
-                        coffee at index ci.
+    buildPanelFields(ci) Renders active param fields for coffee ci.
     switchCoffee(i)     Activates the tab and panel for coffee i.
     savefield()         Stores a text/select field value on coffees[ci].
-    saveScore()         Stores a score slider value in coffees[ci].data.scores.
-    toggleFlavour()     Adds/removes a specific flavour chip and
-                        resets the picked display.
-    refreshPicked(ci)   Re-renders the picked flavour tags and updates
-                        family label previews for coffee ci.
+    toggleFlavour()     Adds/removes a flavour chip and updates display.
+    refreshPicked(ci)   Re-renders picked flavour tags for coffee ci.
     updateTabDot(ci)    Shows/hides the "has notes" dot on the tab.
-    buildReview()       Generates the full review HTML from coffees[].
+    buildReview()       Generates the review HTML from coffees[].
     goTo(view)          Switches between views, updates phase bar.
-    saveSession()       Shows the saved confirmation screen.
+    saveSession()       Updates session in Supabase, sets is_active=false.
     resetAll()          Clears all state and returns to setup.
 
   TIMER:
-    useTimer flag set in setup by toggling the Timer card.
-    TIMER_SECS = 240 (4 minutes — standard cupping steep time).
-    timerStartStop() handles start/pause/resume.
-    timerReset() resets display and clears interval.
-    Timer is collapsible in the cupping view via toggleTimerWidget().
+    useTimer flag set in setup. TIMER_SECS = 240 (4 min steep).
+    Collapsible in the cupping view via toggleTimerWidget().
 
   FUTURE / TODO:
-    - saveSession() needs to POST session data to a backend API.
-      All the data is already in coffees[] and ready to serialise.
-    - "My sessions" nav link needs a real sessions list/dashboard page.
-    - Consider adding a "duplicate coffee" button in setup for when
-      you want to cup the same coffee at different grind settings.
-    - Offline support: session data could be saved to localStorage
-      as a draft in case the page is accidentally closed.
+    - Offline draft support: save session to localStorage if page closes.
+    - Duplicate coffee button in setup.
   ═══════════════════════════════════════════════════════════════
 -->
 <html lang="en">
@@ -510,15 +494,14 @@
   // ══════════════════════════════════════════════════════════
   //  DATA DEFINITIONS
   //  These arrays define what the app knows about. Edit here
-  //  to add new fields, flavours or score attributes.
+  //  to add new fields or flavours.
   // ══════════════════════════════════════════════════════════
 
   // ALL_PARAMS defines every possible field a user can capture.
   // 'type' controls how the field is rendered in buildPanelFields():
   //   text     → plain text input
   //   select   → dropdown (options array required)
-  //   scores   → group of range sliders (uses SCORE_ATTRS)
-  //   flavours → the interactive flavour wheel picker
+    //   flavours → the interactive flavour wheel picker
   //   textarea → multi-line free text
   const ALL_PARAMS = [
     { id:'origin',   label:'Origin',        type:'text',     placeholder:'e.g. Ethiopia, Yirgacheffe' },
@@ -546,8 +529,6 @@
     { id:'sour',    emoji:'🍋', name:'Sour / Fermented',specifics:['Citric','Bright','Sour','Tangy','Winey','Yeasty','Funky'] },
   ];
 
-  // SCORE_ATTRS are the attributes shown as sliders in the score block.
-  // Add or remove strings here to change what gets scored.
 
 
   // ══════════════════════════════════════════════════════════
@@ -557,7 +538,7 @@
   // ══════════════════════════════════════════════════════════
 
   // coffees[] is the core data store. Each entry is:
-  //   { name: string, data: { [paramId]: value, scores: {}, flavours: [] } }
+  //   { name: string, data: { [paramId]: value, flavours: [] } }
   let coffees = [];
 
   // activeParams tracks which fields the user toggled on in setup.
@@ -779,7 +760,7 @@
   }
 
   // Renders only the fields that were toggled on in setup.
-  // Dispatches to specialised builders for scores and flavours.
+  // Dispatches to specialised builders for flavours and text fields.
   function buildPanelFields(ci) {
     return ALL_PARAMS
       .filter(p => activeParams.has(p.id))
@@ -814,9 +795,7 @@
       }).join('');
   }
 
-  // Builds the score slider block for coffee ci.
   // Sliders range 1–10 in 0.5 steps. Default value is 7.
-  // Scores are stored in coffees[ci].data.scores[attr].
   // Builds the collapsible flavour wheel picker for coffee ci.
   // WHEEL families are rendered as expandable rows. When a family
   // is expanded, specific chips are shown. Selected chips are
@@ -967,7 +946,6 @@
     coffees.forEach((c,i) => {
       const d = c.data;
       const scores = d.scores || {};
-      // Average score across all scored attributes (null if none scored)
       const avg = Object.keys(scores).length
         ? (Object.values(scores).reduce((a,b)=>a+b,0) / Object.keys(scores).length).toFixed(1)
         : null;
@@ -986,7 +964,6 @@
         }
       });
 
-      // Render score breakdown inline
       if (activeParams.has('score') && Object.keys(scores).length) {
         html += `<div class="review-row"><span class="review-key">Scores</span><span class="review-val">${Object.entries(scores).map(([k,v])=>`${k} ${v}`).join(' · ')}</span></div>`;
       }

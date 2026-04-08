@@ -7,16 +7,27 @@
   PURPOSE:
     Account management page for logged-in users.
     Currently provides:
-      - View account details
+      - View account details (name, email, occupation, member since)
       - Export all personal data as JSON (GDPR right to portability)
-      - Delete account and all associated data (GDPR right to erasure)
+      - Delete account via magic link confirmation (GDPR right to erasure)
+
+  DELETE FLOW:
+    1. User clicks "Delete my account" and confirms the dialog
+    2. signInWithOtp() sends a magic link to their email with
+       redirect_to=account.html?delete=1
+    3. localStorage flag 'pending_delete' is set
+    4. User clicks the link — lands back on account.html?delete=1
+    5. onAuthStateChange fires SIGNED_IN — completeDelete() runs
+    6. delete_user() RPC deletes auth.users row (cascades to all tables)
+    7. User is signed out and redirected to index.html
+    8. All other open tabs detect SIGNED_OUT and redirect to index.html
 
   SUPABASE CALLS:
     SELECT profiles WHERE user_id = auth.uid()
     SELECT cupping_sessions WHERE user_id = auth.uid()
     SELECT session_responses WHERE share_token IN (user's sessions)
     SELECT analytics WHERE user_id = auth.uid()
-    DELETE auth.users (cascades to all tables)
+    RPC delete_user() — SECURITY DEFINER, deletes auth.users row
   ═══════════════════════════════════════════════════════════════
 -->
 <html lang="en">
