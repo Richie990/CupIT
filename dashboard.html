@@ -463,16 +463,12 @@
     }
 
     list.innerHTML = sessions.map(s => {
-      const avg = sessionAvgScore(s);
-      const scoreClass = avg === null ? 'none' : avg >= 8 ? 'high' : avg >= 7 ? 'mid' : 'low';
-      const scoreText  = avg !== null ? avg.toFixed(1) : '—';
       const allFlavours = [...new Set(s.coffees.flatMap(c => c.data?.flavours || []))];
       const topFlavours = allFlavours.slice(0, 2);
       const coffeeCount = s.coffees.length;
 
       return `
         <a href="history.html" class="recent-item">
-          <div class="recent-score ${scoreClass}">${scoreText}</div>
           <div class="recent-info">
             <div class="recent-name">${escHtml(s.name)}</div>
             <div class="recent-meta">
@@ -490,11 +486,6 @@
   //  UTILITIES
   // ══════════════════════════════════════════════════════════
 
-  function sessionAvgScore(session) {
-    const allScores = session.coffees.flatMap(c => Object.values(c.data?.scores || {}));
-    if (!allScores.length) return null;
-    return allScores.reduce((a, b) => a + b, 0) / allScores.length;
-  }
 
   function formatDate(iso) {
     return new Date(iso + 'T00:00:00').toLocaleDateString('en-IE', {

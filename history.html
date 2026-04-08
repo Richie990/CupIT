@@ -18,7 +18,7 @@
   PAGE LAYOUT:
     TOP NAV       Sticky nav with logo and account link
     HEADER        Page title, session count, "New session" button
-    FILTER BAR    Search + filter controls (name, date, score, roaster)
+    FILTER BAR    Search + filter controls (name, date, roaster)
     SESSION TABLE Dense table showing one row per session.
                   Columns: Date, Session Name, Coffees, Avg Score,
                   Top Flavours, Roaster. Sortable by column header.
@@ -175,17 +175,6 @@
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239b6b47' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 10px center;
       padding-right: 28px; cursor: pointer; min-width: 110px;
-    }
-    .filter-score-wrap {
-      display: flex; align-items: center; gap: 6px;
-      white-space: nowrap;
-    }
-    .filter-score-label {
-      font-family: 'DM Mono', monospace; font-size: 0.58rem;
-      letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid);
-    }
-    .filter-score-input {
-      width: 52px; text-align: center; padding: 8px 6px;
     }
     .filter-sep { color: var(--light); font-size: 0.8rem; }
     .btn-clear-filters {
@@ -552,14 +541,6 @@
     title="To date" onchange="renderTable()" />
 
   <!-- Filter by score range -->
-  <div class="filter-score-wrap">
-    <span class="filter-score-label">Score</span>
-    <input type="number" class="filter-input filter-score-input" id="filter-score-min"
-      min="1" max="10" step="0.5" placeholder="min" oninput="debouncedRender()" />
-    <span class="filter-sep">–</span>
-    <input type="number" class="filter-input filter-score-input" id="filter-score-max"
-      min="1" max="10" step="0.5" placeholder="max" oninput="debouncedRender()" />
-  </div>
 
   <button class="btn-clear-filters" onclick="clearFilters()">Clear filters</button>
 </div>
@@ -584,9 +565,6 @@
         </th>
         <th data-col="coffees" onclick="setSort('coffees')">
           Coffees <span class="sort-arrow" id="arrow-coffees"></span>
-        </th>
-        <th data-col="score" onclick="setSort('score')">
-          Avg score <span class="sort-arrow" id="arrow-score"></span>
         </th>
         <th>Top flavours</th>
         <th data-col="roaster" onclick="setSort('roaster')">
@@ -715,8 +693,6 @@
     const roaster  = document.getElementById('filter-roaster').value;
     const dateFrom = document.getElementById('filter-date-from').value;
     const dateTo   = document.getElementById('filter-date-to').value;
-    const scoreMin = parseFloat(document.getElementById('filter-score-min').value) || null;
-    const scoreMax = parseFloat(document.getElementById('filter-score-max').value) || null;
 
     return sessions.filter(s => {
       // Text search: session name or any coffee name
@@ -737,7 +713,6 @@
       if (dateTo   && s.date > dateTo)   return false;
 
       // Score range filter: session's average score must fall within range
-      const avg = sessionAvgScore(s);
       if (avg !== null) {
         if (scoreMin !== null && avg < scoreMin) return false;
         if (scoreMax !== null && avg > scoreMax) return false;
@@ -753,8 +728,6 @@
     document.getElementById('filter-roaster').value  = '';
     document.getElementById('filter-date-from').value = '';
     document.getElementById('filter-date-to').value   = '';
-    document.getElementById('filter-score-min').value = '';
-    document.getElementById('filter-score-max').value = '';
     renderTable();
   }
 
@@ -787,7 +760,6 @@
         case 'date':    av = a.date; bv = b.date; break;
         case 'name':    av = a.name.toLowerCase(); bv = b.name.toLowerCase(); break;
         case 'coffees': av = a.coffees.length; bv = b.coffees.length; break;
-        case 'score':   av = sessionAvgScore(a) ?? -1; bv = sessionAvgScore(b) ?? -1; break;
         case 'roaster':
           // Sort by first roaster found in the session
           av = (a.coffees[0]?.data?.roaster || '').toLowerCase();
@@ -802,7 +774,7 @@
   }
 
   function updateSortArrows() {
-    const cols = ['date','name','coffees','score','roaster'];
+    const cols = ['date','name','coffees','roaster'];
     cols.forEach(col => {
       const th    = document.querySelector(`th[data-col="${col}"]`);
       const arrow = document.getElementById('arrow-' + col);
@@ -837,9 +809,6 @@
 
     const tbody = document.getElementById('table-body');
     tbody.innerHTML = sorted.map((s, i) => {
-      const avg       = sessionAvgScore(s);
-      const scoreClass = avg === null ? 'none' : avg >= 8 ? 'high' : avg >= 7 ? 'mid' : 'low';
-      const scoreText  = avg !== null ? avg.toFixed(1) : '—';
 
       // Gather all flavours from all coffees in the session
       const allFlavours = [...new Set(s.coffees.flatMap(c => c.data.flavours || []))];
@@ -857,7 +826,6 @@
           ${s.coffees.length > 1 ? `<div class="td-name-sub">${s.coffees.map(c => escHtml(c.name)).join(', ')}</div>` : ''}
         </td>
         <td class="td-coffees">${s.coffees.length}</td>
-        <td><span class="score-pill ${scoreClass}">${scoreText}</span></td>
         <td class="td-flavours">
           <div class="flavour-chips">
             ${showFlavours.map(f => `<span class="flavour-chip">${escHtml(f)}</span>`).join('')}
@@ -902,13 +870,9 @@
 
     session.coffees.forEach((c, i) => {
       const d      = c.data;
-      const scores = d.scores || {};
-      const avg    = avgScore(scores);
-
       html += `<div class="drawer-coffee">
         <div class="drawer-coffee-header">
           <span class="drawer-coffee-name">${escHtml(c.name)}</span>
-          ${avg !== null ? `<span class="drawer-score-badge">${avg.toFixed(1)}</span>` : ''}
         </div>`;
 
       if (d.origin)  html += drawerRow('Origin',  d.origin);
@@ -916,21 +880,6 @@
       if (d.process) html += drawerRow('Process', d.process);
       if (d.roast)   html += drawerRow('Roast',   d.roast);
       if (d.brew)    html += drawerRow('Method',  d.brew);
-
-      if (Object.keys(scores).length) {
-        html += `<div class="drawer-divider"></div>
-          <span class="drawer-section-label">Scores</span>
-          <div class="drawer-score-bars">
-            ${Object.entries(scores).map(([attr, val]) => `
-              <div class="score-bar-row">
-                <span class="score-bar-label">${attr}</span>
-                <div class="score-bar-track">
-                  <div class="score-bar-fill" style="width:${(val/10)*100}%"></div>
-                </div>
-                <span class="score-bar-val">${val}</span>
-              </div>`).join('')}
-          </div>`;
-      }
 
       if (d.flavours?.length) {
         html += `<div class="drawer-divider"></div>
@@ -1077,18 +1026,8 @@
 
   // Average score across all coffees in a session.
   // Returns null if no scores have been entered.
-  function sessionAvgScore(session) {
-    const allScores = session.coffees.flatMap(c => Object.values(c.data.scores || {}));
-    if (!allScores.length) return null;
-    return allScores.reduce((a, b) => a + b, 0) / allScores.length;
-  }
 
   // Average score across all attributes for a single coffee.
-  function avgScore(scores) {
-    const vals = Object.values(scores);
-    if (!vals.length) return null;
-    return vals.reduce((a, b) => a + b, 0) / vals.length;
-  }
 
   // Formats an ISO date string (YYYY-MM-DD) for display.
   function formatDate(iso) {

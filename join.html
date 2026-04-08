@@ -203,31 +203,6 @@
     .form-input::placeholder, .form-textarea::placeholder { color: var(--light); font-style: italic; }
     .form-textarea { resize: vertical; min-height: 80px; line-height: 1.55; }
 
-    /* Score sliders */
-    .score-row {
-      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
-    }
-    .score-label {
-      font-family: 'DM Mono', monospace; font-size: 0.62rem;
-      letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--mid); width: 90px; flex-shrink: 0;
-    }
-    .score-slider {
-      flex: 1; -webkit-appearance: none; appearance: none;
-      height: 4px; border-radius: 2px;
-      background: var(--divider); outline: none;
-      transition: background 0.2s;
-    }
-    .score-slider::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 18px; height: 18px;
-      border-radius: 50%; background: var(--dark); cursor: pointer;
-      border: 2px solid var(--paper);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-    }
-    .score-val {
-      font-family: 'DM Mono', monospace; font-size: 0.7rem;
-      color: var(--brown); width: 28px; text-align: right; flex-shrink: 0;
-    }
 
     /* Flavour chips */
     .flavour-families { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -384,7 +359,6 @@
   let guestCoffees   = [];    // array of { name, data: {} } matching host's coffees
   let flavourPicks   = [];    // per-coffee flavour selections: array of arrays
 
-  const SCORE_ATTRS = ['Acidity','Body','Sweetness','Finish','Balance'];
 
   const WHEEL = [
     { id:'fruity',  emoji:'🍓', name:'Fruity',    specifics:['Blackberry','Raspberry','Blueberry','Strawberry','Lemon','Lime','Orange','Grapefruit','Peach','Apricot','Cherry','Mango','Pineapple','Passion Fruit','Raisin','Prune'] },
@@ -494,24 +468,9 @@
   function buildPanel(idx, params) {
     let html = `<div class="section-card">`;
 
-    // Scores
-    if (params.has('score')) {
-      html += `<span class="section-card-title">Scores</span>`;
-      SCORE_ATTRS.forEach(attr => {
-        html += `
-          <div class="score-row">
-            <span class="score-label">${attr}</span>
-            <input type="range" class="score-slider" min="1" max="10" step="0.5" value="7"
-              id="score-${idx}-${attr}"
-              oninput="document.getElementById('score-val-${idx}-${attr}').textContent=this.value" />
-            <span class="score-val" id="score-val-${idx}-${attr}">7</span>
-          </div>`;
-      });
-    }
-
     // Flavours
     if (params.has('flavours')) {
-      html += `<span class="section-card-title" style="margin-top:${params.has('score') ? '16px' : '0'};display:block">Flavour notes</span>`;
+      html += `<span class="section-card-title" style="display:block">Flavour notes</span>`;
       html += `<div class="flavour-families">`;
       WHEEL.forEach(f => {
         html += `<button class="flavour-family-btn" id="family-${idx}-${f.id}" onclick="toggleFamily(${idx},'${f.id}')">${f.emoji} ${f.name}</button>`;
@@ -601,15 +560,6 @@
     const idx    = currentCoffee;
     const params = new Set(sessionData.params_active || []);
     const data   = {};
-
-    if (params.has('score')) {
-      const scores = {};
-      SCORE_ATTRS.forEach(attr => {
-        const el = document.getElementById(`score-${idx}-${attr}`);
-        if (el) scores[attr] = parseFloat(el.value);
-      });
-      data.scores = scores;
-    }
 
     if (params.has('flavours')) {
       data.flavours = [...flavourPicks[idx]];
