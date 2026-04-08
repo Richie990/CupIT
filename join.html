@@ -331,6 +331,20 @@
     <p class="state-body">This link may be invalid or the session may have ended.</p>
   </div>
 
+  <!-- Session closed state -->
+  <div class="state-card" id="state-closed" style="display:none">
+    <span class="state-icon">🔒</span>
+    <h2 class="state-title">Session ended</h2>
+    <p class="state-body">The host has closed this cupping session. No further responses can be submitted.</p>
+  </div>
+
+  <!-- Already submitted state -->
+  <div class="state-card" id="state-submitted" style="display:none">
+    <span class="state-icon">✅</span>
+    <h2 class="state-title">Already submitted</h2>
+    <p class="state-body">You've already submitted your notes for this session.</p>
+  </div>
+
   <!-- Thank you state -->
   <div class="state-card" id="state-thanks" style="display:none">
     <span class="state-icon">✅</span>
@@ -390,15 +404,31 @@
 
     if (!token) { showError(); return; }
 
+    // Check if this guest already submitted in this browser session
+    if (sessionStorage.getItem(`submitted_${token}`)) {
+      document.getElementById('state-loading').style.display = 'none';
+      document.getElementById('state-submitted').style.display = 'block';
+      return;
+    }
+
     try {
-      // Fetch session using share token — no auth needed
+      // Fetch session using share token — check is_active too
       const { data, error } = await window.supabaseClient
         .from('cupping_sessions')
-        .select('session_name, coffees, params_active')
+        .select('session_name, coffees, params_active, is_active')
         .eq('share_token', token)
         .single();
 
       if (error || !data) { showError(); return; }
+
+      // Check if session is still open
+      if (!data.is_active) {
+        document.getElementById('state-loading').style.display = 'none';
+        document.getElementById('state-closed').style.display = 'block';
+        document.getElementById('header-title').innerHTML = 'Session <em>ended</em>';
+        document.getElementById('header-sub').textContent = 'This session is no longer accepting responses';
+        return;
+      }
 
       sessionData = { ...data, token };
 
@@ -602,6 +632,19 @@
     btn.textContent = 'Saving...';
 
     try {
+      // Final server-side check — make sure session is still active
+      const { data: check } = await window.supabaseClient
+        .from('cupping_sessions')
+        .select('is_active')
+        .eq('share_token', sessionData.token)
+        .single();
+
+      if (!check || !check.is_active) {
+        document.getElementById('step-cupping').style.display = 'none';
+        document.getElementById('state-closed').style.display = 'block';
+        return;
+      }
+
       const { error } = await window.supabaseClient
         .from('session_responses')
         .insert({
@@ -617,6 +660,9 @@
         alert('Something went wrong. Please try again.');
         return;
       }
+
+      // Mark as submitted in sessionStorage so refresh shows submitted state
+      sessionStorage.setItem(`submitted_${sessionData.token}`, '1');
 
       // Show thank you
       document.getElementById('step-cupping').style.display = 'none';

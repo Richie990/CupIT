@@ -1077,11 +1077,12 @@
           coffees:       coffees,
           params_active: [...activeParams],
           timer_enabled: useTimer,
+          is_active:     false,
         })
         .eq('share_token', shareToken)
         .eq('user_id', session.user.id));
     } else {
-      // Solo session — no guests, insert fresh
+      // Solo session — no guests, insert fresh and immediately inactive
       ({ error } = await window.supabaseClient
         .from('cupping_sessions')
         .insert({
@@ -1092,6 +1093,7 @@
           params_active: [...activeParams],
           timer_enabled: useTimer,
           share_token:   null,
+          is_active:     false,
         }));
     }
 

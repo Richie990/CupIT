@@ -345,6 +345,25 @@
 
     .drawer-body { padding: 20px; flex: 1; }
 
+    /* View toggle — pill switcher between host notes and guest responses */
+    .drawer-toggle {
+      display: flex; background: var(--bg);
+      border-radius: 10px; padding: 3px;
+      margin-bottom: 16px; gap: 0;
+    }
+    .drawer-toggle-btn {
+      flex: 1; padding: 8px 10px;
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      border: none; cursor: pointer; border-radius: 8px;
+      transition: all 0.2s; color: var(--mid); background: transparent;
+    }
+    .drawer-toggle-btn.active {
+      background: var(--paper);
+      color: var(--brown);
+      border: 1px solid var(--divider);
+    }
+
     /* Individual coffee card inside the drawer */
     .drawer-coffee {
       background: var(--bg);
@@ -552,9 +571,17 @@
     </div>
     <button class="drawer-close" onclick="closeDrawer()">✕</button>
   </div>
-  <div class="drawer-body" id="drawer-body"></div>
+  <div class="drawer-body" id="drawer-body">
+    <div class="drawer-toggle" id="drawer-toggle" style="display:none">
+      <button class="drawer-toggle-btn active" id="toggle-host" onclick="switchDrawerView('host')">Your notes</button>
+      <button class="drawer-toggle-btn" id="toggle-guests" onclick="switchDrawerView('guests')">Guest responses</button>
+    </div>
+    <div id="drawer-host-content"></div>
+    <div id="drawer-guest-content" style="display:none"></div>
+  </div>
   <div class="drawer-footer">
     <button class="drawer-btn drawer-btn-ghost" onclick="closeDrawer()">Close</button>
+    <button class="drawer-btn drawer-btn-ghost" id="btn-end-session" onclick="endSession()" style="display:none;color:#c0392b;border-color:#c0392b">End session</button>
     <button class="drawer-btn drawer-btn-primary" onclick="reopenSession()">Re-cup this →</button>
   </div>
 </div>
@@ -596,7 +623,7 @@
   async function loadSessions(userId) {
     const { data, error } = await window.supabaseClient
       .from('cupping_sessions')
-      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token')
+      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active')
       .eq('user_id', userId)
       .order('id', { ascending: false });
 
@@ -613,6 +640,7 @@
       date:        s.session_date,
       coffees:     s.coffees || [],
       shareToken:  s.share_token || null,
+      isActive:    s.is_active,
     }));
 
     // Update session count in header
@@ -823,7 +851,11 @@
     // Populate drawer header
     document.getElementById('drawer-title').textContent = session.name;
     document.getElementById('drawer-meta').textContent  =
-      `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''}`;
+      `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''}${session.isActive ? ' · 🟢 Active' : ''}`;
+
+    // Show End session button only for active sessions with a share token
+    const endBtn = document.getElementById('btn-end-session');
+    endBtn.style.display = (session.isActive && session.shareToken) ? 'inline-flex' : 'none';
 
     // Build drawer body — host's coffees first
     let html = `<span style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:14px">Your notes</span>`;
@@ -877,13 +909,18 @@
       html += `</div>`;
     });
 
-    document.getElementById('drawer-body').innerHTML = html;
+    document.getElementById('drawer-host-content').innerHTML = html;
+    document.getElementById('drawer-guest-content').innerHTML = '<p style="font-size:0.85rem;color:var(--mid);padding:8px 0">Loading guest responses...</p>';
 
-    // Open drawer immediately so host sees their notes straight away
+    // Reset toggle to host view
+    document.getElementById('drawer-toggle').style.display = 'none';
+    switchDrawerView('host');
+
+    // Open drawer immediately
     document.getElementById('drawer').classList.add('open');
     document.getElementById('drawer-overlay').classList.add('open');
 
-    // Fetch guest responses in the background and append if any exist
+    // Fetch guest responses in the background
     if (session.shareToken) {
       try {
         const { data: responses, error } = await window.supabaseClient
@@ -892,68 +929,34 @@
           .eq('share_token', session.shareToken)
           .order('created_at', { ascending: true });
 
-        if (!error && responses && responses.length > 0) {
-          let guestHtml = `
-            <div style="margin-top:24px;padding-top:20px;border-top:2px solid var(--divider)">
-              <span style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:14px">
-                Guest responses (${responses.length})
-              </span>`;
+        const count = (responses || []).length;
+        document.getElementById('toggle-guests').textContent = `Guest responses (${count})`;
+        document.getElementById('drawer-toggle').style.display = 'flex';
 
+        if (!error && count > 0) {
+          let guestHtml = '';
           responses.forEach(r => {
-            guestHtml += `
-              <div style="margin-bottom:20px">
-                <p style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--brown);font-weight:500;margin-bottom:12px">
-                  ${escHtml(r.guest_name)}
-                </p>`;
-
+            guestHtml += `<p style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--brown);font-weight:500;margin-bottom:12px;margin-top:8px">${escHtml(r.guest_name)}</p>`;
             r.coffees.forEach(c => {
-              const d      = c.data || {};
+              const d = c.data || {};
               const scores = d.scores || {};
-              const avg    = avgScore(scores);
-
-              guestHtml += `<div class="drawer-coffee">
-                <div class="drawer-coffee-header">
-                  <span class="drawer-coffee-name">${escHtml(c.name)}</span>
-                  ${avg !== null ? `<span class="drawer-score-badge">${avg.toFixed(1)}</span>` : ''}
-                </div>`;
-
+              const avg = avgScore(scores);
+              guestHtml += `<div class="drawer-coffee"><div class="drawer-coffee-header"><span class="drawer-coffee-name">${escHtml(c.name)}</span>${avg !== null ? `<span class="drawer-score-badge">${avg.toFixed(1)}</span>` : ''}</div>`;
               if (Object.keys(scores).length) {
-                guestHtml += `<div class="drawer-score-bars" style="margin-top:8px">
-                  ${Object.entries(scores).map(([attr, val]) => `
-                    <div class="score-bar-row">
-                      <span class="score-bar-label">${attr}</span>
-                      <div class="score-bar-track">
-                        <div class="score-bar-fill" style="width:${(val/10)*100}%"></div>
-                      </div>
-                      <span class="score-bar-val">${val}</span>
-                    </div>`).join('')}
-                </div>`;
+                guestHtml += `<div class="drawer-score-bars">${Object.entries(scores).map(([attr,val]) => `<div class="score-bar-row"><span class="score-bar-label">${attr}</span><div class="score-bar-track"><div class="score-bar-fill" style="width:${(val/10)*100}%"></div></div><span class="score-bar-val">${val}</span></div>`).join('')}</div>`;
               }
-
               if (d.flavours?.length) {
-                guestHtml += `<div class="drawer-divider"></div>
-                  <span class="drawer-section-label">Flavour notes</span>
-                  <div class="drawer-flavour-tags">
-                    ${d.flavours.map(f => `<span class="drawer-flavour-tag">${escHtml(f)}</span>`).join('')}
-                  </div>`;
+                guestHtml += `<div class="drawer-divider"></div><span class="drawer-section-label">Flavour notes</span><div class="drawer-flavour-tags">${d.flavours.map(f=>`<span class="drawer-flavour-tag">${escHtml(f)}</span>`).join('')}</div>`;
               }
-
               if (d.notes) {
-                guestHtml += `<div class="drawer-divider"></div>
-                  <span class="drawer-section-label">Tasting notes</span>
-                  <p style="font-size:0.85rem;color:var(--mid);font-style:italic;line-height:1.65">${escHtml(d.notes)}</p>`;
+                guestHtml += `<div class="drawer-divider"></div><span class="drawer-section-label">Tasting notes</span><p style="font-size:0.85rem;color:var(--mid);font-style:italic;line-height:1.65">${escHtml(d.notes)}</p>`;
               }
-
               guestHtml += `</div>`;
             });
-
-            guestHtml += `</div>`;
           });
-
-          guestHtml += `</div>`;
-
-          // Append guest responses to drawer
-          document.getElementById('drawer-body').innerHTML += guestHtml;
+          document.getElementById('drawer-guest-content').innerHTML = guestHtml;
+        } else {
+          document.getElementById('drawer-guest-content').innerHTML = '<p style="font-size:0.85rem;color:var(--mid);padding:8px 0">No guest responses yet.</p>';
         }
       } catch(e) {
         console.error('Error fetching guest responses:', e.message);
@@ -961,18 +964,50 @@
     }
   }
 
+  function switchDrawerView(view) {
+    document.getElementById('drawer-host-content').style.display = view === 'host' ? 'block' : 'none';
+    document.getElementById('drawer-guest-content').style.display = view === 'guests' ? 'block' : 'none';
+    document.getElementById('toggle-host').classList.toggle('active', view === 'host');
+    document.getElementById('toggle-guests').classList.toggle('active', view === 'guests');
+  }
+
   function closeDrawer() {
     document.getElementById('drawer').classList.remove('open');
     document.getElementById('drawer-overlay').classList.remove('open');
-    // Deselect row after animation completes
     setTimeout(() => {
       document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
       activeDrawerId = null;
     }, 350);
   }
 
+  // Closes the session — sets is_active = false so guests can no longer submit
+  async function endSession() {
+    const session = sessions.find(s => s.id === activeDrawerId);
+    if (!session || !session.shareToken) return;
+
+    if (!confirm('End this session? Guests will no longer be able to submit responses.')) return;
+
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .update({ is_active: false })
+      .eq('id', activeDrawerId);
+
+    if (error) {
+      console.error('Error ending session:', error.message);
+      alert('Something went wrong. Please try again.');
+      return;
+    }
+
+    // Update local state
+    session.isActive = false;
+
+    // Update drawer meta and hide End session button
+    document.getElementById('drawer-meta').textContent =
+      `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''}`;
+    document.getElementById('btn-end-session').style.display = 'none';
+  }
+
   // Placeholder — will navigate to cupping.html pre-populated
-  // with the coffees from this session once backend is wired up.
   function reopenSession() {
     alert('Re-cupping will be available once sessions are saved to your account.');
   }
