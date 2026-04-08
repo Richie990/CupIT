@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Terms of Service  (terms.html)
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2319" />
+  <title>Terms of Service — CupIT</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CupIT" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --bg:      #e8e4d9;
+      --paper:   #f0ede5;
+      --dark:    #1a2319;
+      --brown:   #2d3b2d;
+      --mid:     #8faa8b;
+      --light:   #8faa8b;
+      --accent:  #c9a84c;
+      --cream:   #e8e4d9;
+      --divider: rgba(45,59,45,0.12);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      font-size: 16px; line-height: 1.7;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    nav {
+      background: var(--dark);
+      padding: 18px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-back {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-back:hover { color: var(--cream); }
+
+    .page-header {
+      background: var(--dark);
+      padding: 40px 24px 52px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(201,168,76,0.25) 0%, transparent 65%);
+    }
+    .page-header-content { position: relative; z-index: 1; }
+    .page-header-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px; display: block;
+    }
+    .page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 5vw, 2.4rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+    }
+    .page-header h1 em { font-style: italic; color: var(--light); }
+    .page-header-sub {
+      font-size: 0.88rem; color: rgba(232,228,217,0.7);
+      margin-top: 8px; font-weight: 300;
+    }
+
+    .content {
+      flex: 1; max-width: 680px; width: 100%;
+      margin: 0 auto; padding: 48px 24px 80px;
+    }
+
+    h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem; font-weight: 600;
+      color: var(--brown); margin: 36px 0 12px;
+    }
+    h2:first-child { margin-top: 0; }
+
+    p { color: var(--brown); margin-bottom: 14px; }
+
+    ul {
+      margin: 0 0 14px 20px; color: var(--brown);
+    }
+    ul li { margin-bottom: 6px; }
+
+    .last-updated {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 36px; display: block;
+    }
+
+    footer {
+      background: var(--dark); padding: 28px 24px; text-align: center;
+    }
+    footer p {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(232,228,217,0.3);
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
+  <a href="index.html" class="nav-back">← Back to home</a>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-content">
+    <span class="page-header-tag">Legal</span>
+    <h1>Terms of <em>Service</em></h1>
+    <p class="page-header-sub">The rules of the road — kept as simple as possible.</p>
+  </div>
+</div>
+
+<div class="content">
+  <span class="last-updated">Last updated: April 2026</span>
+
+  <p>By creating an account and using CupIT, you agree to these terms. We've kept them short and honest because that's the kind of product CupIT is.</p>
+
+  <h2>What CupIT is</h2>
+  <p>CupIT is a free coffee cupping journal built for the specialty coffee community. It was created by a coffee professional who needed a tool like this and decided to build it for everyone. It is not a commercial product. There are no paid tiers, no advertising and no monetisation of any kind at this time.</p>
+
+  <h2>Your account</h2>
+  <p>You are responsible for keeping your login credentials secure. You must be at least 16 years old to create an account. One account per person — please don't create multiple accounts or share accounts with others.</p>
+
+  <h2>Your content</h2>
+  <p>Everything you log in CupIT — your cupping notes, flavour picks, session names — belongs to you. We don't claim any ownership over it. We store it securely on your behalf so you can access it whenever you need it.</p>
+  <p>In return, we ask that you don't use CupIT to store anything illegal, harmful or offensive. This is a coffee app — keep it that way.</p>
+
+  <h2>What we promise</h2>
+  <ul>
+    <li>CupIT is free to use and we will give reasonable notice if that ever changes</li>
+    <li>We will never sell your data or use it for advertising</li>
+    <li>We will never share your cupping notes with roasters, brands or anyone else</li>
+    <li>We will do our best to keep the service running and your data safe</li>
+  </ul>
+
+  <h2>What we can't promise</h2>
+  <p>CupIT is an independent project maintained by one person in their spare time. We can't guarantee 100% uptime or that the service will exist forever. We recommend keeping your own backup of anything important to you.</p>
+  <p>The service is provided as-is, without warranty of any kind. We are not liable for any loss of data or disruption to service.</p>
+
+  <h2>Acceptable use</h2>
+  <p>You agree not to:</p>
+  <ul>
+    <li>Attempt to access other users' data</li>
+    <li>Use CupIT for any purpose other than logging and tracking coffee cuppings</li>
+    <li>Attempt to reverse engineer, copy or republish any part of CupIT without permission</li>
+    <li>Abuse or attempt to overload the service</li>
+  </ul>
+
+  <h2>Termination</h2>
+  <p>You can delete your account at any time. We reserve the right to suspend or terminate accounts that violate these terms.</p>
+
+  <h2>Changes to these terms</h2>
+  <p>If we make material changes we will update the date at the top of this page. Continued use of CupIT after changes are posted constitutes acceptance of the new terms.</p>
+
+  <h2>Governing law</h2>
+  <p>These terms are governed by the laws of Ireland.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about these terms? Reach out via the CupIT GitHub repository.</p>
+
+</div>
+
+<footer>
+  <p>© 2026 CupIT. All rights reserved.</p>
+</footer>
+
+</body>
+</html>

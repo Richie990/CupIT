@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Privacy Policy  (privacy.html)
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2319" />
+  <title>Privacy Policy — CupIT</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CupIT" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --bg:      #e8e4d9;
+      --paper:   #f0ede5;
+      --dark:    #1a2319;
+      --brown:   #2d3b2d;
+      --mid:     #8faa8b;
+      --light:   #8faa8b;
+      --accent:  #c9a84c;
+      --cream:   #e8e4d9;
+      --divider: rgba(45,59,45,0.12);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      font-size: 16px; line-height: 1.7;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    nav {
+      background: var(--dark);
+      padding: 18px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-back {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-back:hover { color: var(--cream); }
+
+    .page-header {
+      background: var(--dark);
+      padding: 40px 24px 52px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(201,168,76,0.25) 0%, transparent 65%);
+    }
+    .page-header-content { position: relative; z-index: 1; }
+    .page-header-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px; display: block;
+    }
+    .page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 5vw, 2.4rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+    }
+    .page-header h1 em { font-style: italic; color: var(--light); }
+    .page-header-sub {
+      font-size: 0.88rem; color: rgba(232,228,217,0.7);
+      margin-top: 8px; font-weight: 300;
+    }
+
+    .content {
+      flex: 1; max-width: 680px; width: 100%;
+      margin: 0 auto; padding: 48px 24px 80px;
+    }
+
+    h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem; font-weight: 600;
+      color: var(--brown); margin: 36px 0 12px;
+    }
+    h2:first-child { margin-top: 0; }
+
+    p { color: var(--brown); margin-bottom: 14px; }
+
+    ul {
+      margin: 0 0 14px 20px; color: var(--brown);
+    }
+    ul li { margin-bottom: 6px; }
+
+    .last-updated {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 36px; display: block;
+    }
+
+    footer {
+      background: var(--dark); padding: 28px 24px; text-align: center;
+    }
+    footer p {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(232,228,217,0.3);
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
+  <a href="index.html" class="nav-back">← Back to home</a>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-content">
+    <span class="page-header-tag">Legal</span>
+    <h1>Privacy <em>Policy</em></h1>
+    <p class="page-header-sub">How we handle your data — plainly explained.</p>
+  </div>
+</div>
+
+<div class="content">
+  <span class="last-updated">Last updated: April 2026</span>
+
+  <p>CupIT is a free, community-built coffee cupping journal. This policy explains what data we collect, why we collect it, and what we do with it. We've written it in plain language because we think you deserve to understand it.</p>
+
+  <h2>Who we are</h2>
+  <p>CupIT is an independent project built by a coffee professional, for the coffee community. It is not a commercial product. There is no company behind it, no investors, and no advertising. It was built because the developer needed something like this and couldn't find it — so they built it for everyone.</p>
+
+  <h2>What data we collect</h2>
+  <p>When you create an account, we collect:</p>
+  <ul>
+    <li>Your name</li>
+    <li>Your email address</li>
+    <li>Whether you're using CupIT personally or commercially</li>
+    <li>Optionally, your company name and occupation</li>
+  </ul>
+  <p>When you use the app, we store:</p>
+  <ul>
+    <li>Your cupping session data — coffee names, flavour notes, tasting notes and any other fields you choose to fill in</li>
+    <li>Basic usage events (pages visited, sessions started) for the purpose of understanding how the app is being used</li>
+  </ul>
+  <p>We do not collect payment information. CupIT is free to use.</p>
+
+  <h2>How we use your data</h2>
+  <p>Your data is used only to provide the CupIT service to you. Specifically:</p>
+  <ul>
+    <li>Your account details are used to identify you and keep your sessions private</li>
+    <li>Your cupping sessions are stored so you can access them across devices</li>
+    <li>Usage analytics help us understand which features are being used so we can improve the app</li>
+  </ul>
+  <p>We do not sell your data. We do not share your data with third parties. We do not use your data for advertising. We do not use your cupping notes for any purpose other than displaying them back to you.</p>
+
+  <h2>Where your data is stored</h2>
+  <p>CupIT uses Supabase, a third-party database platform, to store your account and session data securely. Supabase is hosted on infrastructure that complies with GDPR. You can read Supabase's own privacy policy at supabase.com/privacy.</p>
+
+  <h2>Cookies</h2>
+  <p>CupIT uses a small number of cookies strictly to keep you logged in. These are session cookies — they are necessary for the app to function and do not track you across other websites. We do not use advertising cookies or third-party tracking cookies.</p>
+
+  <h2>Your rights</h2>
+  <p>Under GDPR you have the right to:</p>
+  <ul>
+    <li>Access the data we hold about you</li>
+    <li>Request that we correct inaccurate data</li>
+    <li>Request that we delete your account and all associated data</li>
+    <li>Export your data</li>
+  </ul>
+  <p>To exercise any of these rights, contact us at the email address listed at the bottom of this page.</p>
+
+  <h2>Data retention</h2>
+  <p>We keep your data for as long as your account is active. If you delete your account, all your data is permanently deleted from our systems.</p>
+
+  <h2>Children</h2>
+  <p>CupIT is not intended for use by anyone under the age of 16. We do not knowingly collect data from children.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If we make material changes to this policy we will update the date at the top of this page. We encourage you to review it periodically.</p>
+
+  <h2>Contact</h2>
+  <p>If you have any questions about this policy or want to exercise your data rights, please reach out via the CupIT GitHub repository.</p>
+
+</div>
+
+<footer>
+  <p>© 2026 CupIT. All rights reserved.</p>
+</footer>
+
+</body>
+</html>

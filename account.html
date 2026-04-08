@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Account Settings  (account.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    Account management page for logged-in users.
+    Currently provides:
+      - View account details
+      - Export all personal data as JSON (GDPR right to portability)
+      - Delete account and all associated data (GDPR right to erasure)
+
+  SUPABASE CALLS:
+    SELECT profiles WHERE user_id = auth.uid()
+    SELECT cupping_sessions WHERE user_id = auth.uid()
+    SELECT session_responses WHERE share_token IN (user's sessions)
+    SELECT analytics WHERE user_id = auth.uid()
+    DELETE auth.users (cascades to all tables)
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2319" />
+  <title>Account — CupIT</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CupIT" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --bg:      #e8e4d9;
+      --paper:   #f0ede5;
+      --dark:    #1a2319;
+      --brown:   #2d3b2d;
+      --mid:     #8faa8b;
+      --light:   #8faa8b;
+      --accent:  #c9a84c;
+      --cream:   #e8e4d9;
+      --divider: rgba(45,59,45,0.12);
+      --r:       14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV ── */
+    .top-nav {
+      background: var(--dark);
+      padding: 13px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 200;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 20px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--cream); }
+    .nav-link.active { color: var(--cream); font-weight: 500; }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      background: var(--dark);
+      padding: 32px 24px 44px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(201,168,76,0.25) 0%, transparent 65%);
+    }
+    .page-header-content { position: relative; z-index: 1; }
+    .page-header-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 10px; display: block;
+    }
+    .page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+    }
+    .page-header h1 em { font-style: italic; color: var(--light); }
+
+    /* ── CONTENT ── */
+    main {
+      flex: 1; max-width: 560px; width: 100%;
+      margin: 0 auto; padding: 32px 20px 80px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    /* ── CARDS ── */
+    .settings-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 18px; padding: 24px;
+    }
+    .settings-card-title {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 16px; display: block;
+    }
+
+    /* Profile detail rows */
+    .detail-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--divider);
+      font-size: 0.9rem;
+    }
+    .detail-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .detail-label {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid);
+    }
+    .detail-value { color: var(--brown); font-weight: 500; }
+
+    /* Action buttons */
+    .btn-action {
+      width: 100%; padding: 14px;
+      font-family: 'DM Mono', monospace; font-size: 0.68rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border-radius: 50px; cursor: pointer; transition: all 0.2s;
+      border: none; margin-top: 8px;
+    }
+    .btn-action:first-of-type { margin-top: 0; }
+    .btn-export {
+      background: #1a2319; color: #e8e4d9;
+    }
+    .btn-export:hover { background: #2d3b2d; }
+    .btn-export:disabled { opacity: 0.45; pointer-events: none; }
+
+    .btn-delete {
+      background: transparent;
+      border: 1.5px solid rgba(192,57,43,0.3) !important;
+      color: #c0392b;
+    }
+    .btn-delete:hover { background: rgba(192,57,43,0.06); border-color: #c0392b !important; }
+    .btn-delete:disabled { opacity: 0.45; pointer-events: none; }
+
+    .card-desc {
+      font-size: 0.85rem; color: var(--mid);
+      line-height: 1.65; margin-bottom: 16px;
+    }
+
+    /* Status message */
+    .status-msg {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      margin-top: 10px; min-height: 16px; text-align: center;
+    }
+    .status-msg.success { color: #2d4a26; }
+    .status-msg.error   { color: #c0392b; }
+
+    /* Links */
+    .legal-links {
+      text-align: center; margin-top: 8px;
+    }
+    .legal-links a {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); text-decoration: none; margin: 0 8px;
+      transition: color 0.2s;
+    }
+    .legal-links a:hover { color: var(--brown); }
+
+    footer {
+      background: var(--dark); padding: 24px; text-align: center;
+    }
+    footer p {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(232,228,217,0.3);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a href="dashboard.html" class="nav-logo">Cup<em>IT</em></a>
+  <div class="nav-links">
+    <a href="history.html" class="nav-link">My sessions</a>
+    <a href="cupping.html" class="nav-link">New session</a>
+    <a href="account.html" class="nav-link active">Account</a>
+    <a href="#" class="nav-link" onclick="signOut(event)">Sign out</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-content">
+    <span class="page-header-tag">Settings</span>
+    <h1>Your <em>account</em></h1>
+  </div>
+</div>
+
+<main>
+
+  <!-- Profile details -->
+  <div class="settings-card">
+    <span class="settings-card-title">Your details</span>
+    <div id="profile-details">
+      <div class="detail-row">
+        <span class="detail-label">Loading...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export data -->
+  <div class="settings-card">
+    <span class="settings-card-title">Export your data</span>
+    <p class="card-desc">
+      Download a complete copy of all data CupIT holds about you — your profile, cupping sessions, guest responses and usage analytics — as a JSON file.
+    </p>
+    <button class="btn-action btn-export" id="btn-export" onclick="exportData()">Download my data →</button>
+    <p class="status-msg" id="export-status"></p>
+  </div>
+
+  <!-- Delete account -->
+  <div class="settings-card">
+    <span class="settings-card-title">Delete account</span>
+    <p class="card-desc">
+      Permanently delete your account and all associated data including your cupping sessions and profile. This cannot be undone.
+    </p>
+
+    <!-- Step 1: initial delete button -->
+    <div id="delete-step-1">
+      <button class="btn-action btn-delete" id="btn-delete" onclick="requestDeleteCode()">Delete my account</button>
+    </div>
+
+    <!-- Step 2: OTP entry (hidden until code is sent) -->
+    <div id="delete-step-2" style="display:none">
+      <p style="font-size:0.85rem;color:var(--mid);line-height:1.65;margin-bottom:14px">
+        A 6-digit confirmation code has been sent to your email address. Enter it below to permanently delete your account.
+      </p>
+      <input type="text" id="otp-input" maxlength="6" placeholder="000000"
+        style="width:100%;padding:13px 16px;background:var(--bg);border:1.5px solid var(--divider);border-radius:var(--r);font-family:'DM Mono',monospace;font-size:1.2rem;letter-spacing:0.3em;text-align:center;color:var(--brown);outline:none;margin-bottom:10px"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+        onfocus="this.style.borderColor='var(--accent)'"
+        onblur="this.style.borderColor='var(--divider)'" />
+      <button class="btn-action btn-delete" id="btn-confirm-delete" onclick="confirmDelete()">Confirm deletion</button>
+      <button class="btn-action" onclick="cancelDelete()"
+        style="background:transparent;border:1.5px solid var(--divider);color:var(--mid);margin-top:8px">
+        Cancel
+      </button>
+    </div>
+
+    <p class="status-msg" id="delete-status"></p>
+  </div>
+
+  <div class="legal-links">
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="terms.html">Terms of Service</a>
+  </div>
+
+</main>
+
+<footer>
+  <p>© 2026 CupIT. All rights reserved.</p>
+</footer>
+
+<script>
+  // ── AUTH CHECK ──
+  async function init() {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) { window.location.href = 'signup.html'; return; }
+    loadProfile(session.user);
+  }
+
+  // ── LOAD PROFILE ──
+  async function loadProfile(user) {
+    const { data } = await window.supabaseClient
+      .from('profiles')
+      .select('name, company, occupation, use_type, created_at')
+      .eq('user_id', user.id)
+      .single();
+
+    const rows = [
+      { label: 'Name',       value: data?.name       || '—' },
+      { label: 'Email',      value: user.email        || '—' },
+      { label: 'Company',    value: data?.company     || '—' },
+      { label: 'Occupation', value: data?.occupation  || '—' },
+      { label: 'Usage',      value: data?.use_type    || '—' },
+      { label: 'Member since', value: data?.created_at ? new Date(data.created_at).toLocaleDateString('en-IE', { day:'numeric', month:'long', year:'numeric' }) : '—' },
+    ];
+
+    document.getElementById('profile-details').innerHTML = rows.map(r => `
+      <div class="detail-row">
+        <span class="detail-label">${r.label}</span>
+        <span class="detail-value">${escHtml(String(r.value))}</span>
+      </div>`
+    ).join('');
+  }
+
+  // ── EXPORT DATA ──
+  async function exportData() {
+    const btn    = document.getElementById('btn-export');
+    const status = document.getElementById('export-status');
+    btn.disabled = true;
+    btn.textContent = 'Preparing...';
+    status.textContent = '';
+    status.className = 'status-msg';
+
+    try {
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (!session) { window.location.href = 'signup.html'; return; }
+      const userId = session.user.id;
+
+      // Fetch all data in parallel
+      const [profileRes, sessionsRes, analyticsRes] = await Promise.all([
+        window.supabaseClient.from('profiles').select('*').eq('user_id', userId).single(),
+        window.supabaseClient.from('cupping_sessions').select('*').eq('user_id', userId).order('id', { ascending: true }),
+        window.supabaseClient.from('analytics').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+      ]);
+
+      // Fetch guest responses for all sessions that have a share token
+      const tokens = (sessionsRes.data || []).map(s => s.share_token).filter(Boolean);
+      let responsesData = [];
+      if (tokens.length) {
+        const { data } = await window.supabaseClient
+          .from('session_responses')
+          .select('*')
+          .in('share_token', tokens)
+          .order('created_at', { ascending: true });
+        responsesData = data || [];
+      }
+
+      // Build the export object
+      const exportObj = {
+        exported_at:               new Date().toISOString(),
+        cupit_version:             '1.0',
+        profile: {
+          name:       profileRes.data?.name,
+          email:      session.user.email,
+          company:    profileRes.data?.company,
+          occupation: profileRes.data?.occupation,
+          use_type:   profileRes.data?.use_type,
+          created_at: profileRes.data?.created_at,
+        },
+        cupping_sessions:          sessionsRes.data  || [],
+        guest_responses_received:  responsesData,
+        analytics:                 analyticsRes.data || [],
+      };
+
+      // Trigger download
+      const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `cupit-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      status.textContent = 'Download started ✓';
+      status.className   = 'status-msg success';
+      btn.textContent    = 'Download my data →';
+      btn.disabled       = false;
+
+    } catch(e) {
+      console.error('Export error:', e);
+      status.textContent = 'Something went wrong. Please try again.';
+      status.className   = 'status-msg error';
+      btn.textContent    = 'Download my data →';
+      btn.disabled       = false;
+    }
+  }
+
+  // ── DELETE ACCOUNT — STEP 1 ──
+  // Sends a reauthentication OTP email and shows the code entry step.
+  async function requestDeleteCode() {
+    const confirmed = confirm(
+      'Are you sure you want to permanently delete your account?\n\n' +
+      'All your cupping sessions, profile data and account will be deleted. ' +
+      'This cannot be undone.\n\nA confirmation code will be sent to your email.'
+    );
+    if (!confirmed) return;
+
+    const btn    = document.getElementById('btn-delete');
+    const status = document.getElementById('delete-status');
+    btn.disabled = true;
+    btn.textContent = 'Sending code...';
+    status.textContent = '';
+    status.className = 'status-msg';
+
+    try {
+      const { error } = await window.supabaseClient.auth.reauthenticate();
+      if (error) {
+        console.error('Reauth error:', error.message);
+        status.textContent = 'Could not send code. Please try again.';
+        status.className   = 'status-msg error';
+        btn.disabled       = false;
+        btn.textContent    = 'Delete my account';
+        return;
+      }
+
+      // Show OTP entry step
+      document.getElementById('delete-step-1').style.display = 'none';
+      document.getElementById('delete-step-2').style.display = 'block';
+      status.textContent = 'Code sent — check your inbox.';
+      status.className   = 'status-msg success';
+      setTimeout(() => document.getElementById('otp-input').focus(), 100);
+
+    } catch(e) {
+      console.error('Reauth error:', e);
+      status.textContent = 'Something went wrong. Please try again.';
+      status.className   = 'status-msg error';
+      btn.disabled       = false;
+      btn.textContent    = 'Delete my account';
+    }
+  }
+
+  // ── DELETE ACCOUNT — STEP 2 ──
+  // Verifies the OTP then deletes the account.
+  async function confirmDelete() {
+    const code   = document.getElementById('otp-input').value.trim();
+    const status = document.getElementById('delete-status');
+    const btn    = document.getElementById('btn-confirm-delete');
+
+    if (code.length !== 6) {
+      status.textContent = 'Please enter the 6-digit code from your email.';
+      status.className   = 'status-msg error';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Verifying...';
+    status.textContent = '';
+    status.className = 'status-msg';
+
+    try {
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (!session) { window.location.href = 'signup.html'; return; }
+
+      // Verify the OTP
+      const { error: verifyError } = await window.supabaseClient.auth.verifyOtp({
+        email: session.user.email,
+        token: code,
+        type:  'reauthentication',
+      });
+
+      if (verifyError) {
+        console.error('OTP verify error:', verifyError.message);
+        status.textContent = 'Incorrect or expired code. Please try again.';
+        status.className   = 'status-msg error';
+        btn.disabled       = false;
+        btn.textContent    = 'Confirm deletion';
+        return;
+      }
+
+      // OTP verified — delete the account via RPC
+      btn.textContent = 'Deleting...';
+      const { error: deleteError } = await window.supabaseClient.rpc('delete_user');
+
+      if (deleteError) {
+        console.error('Delete error:', deleteError.message);
+        status.textContent = 'Something went wrong. Please contact us to delete your account.';
+        status.className   = 'status-msg error';
+        btn.disabled       = false;
+        btn.textContent    = 'Confirm deletion';
+        return;
+      }
+
+      // Sign out and redirect to home
+      await window.supabaseClient.auth.signOut();
+      window.location.href = 'index.html';
+
+    } catch(e) {
+      console.error('Delete error:', e);
+      status.textContent = 'Something went wrong. Please contact us to delete your account.';
+      status.className   = 'status-msg error';
+      btn.disabled       = false;
+      btn.textContent    = 'Confirm deletion';
+    }
+  }
+
+  // Cancels the OTP step and resets back to the initial delete button.
+  function cancelDelete() {
+    document.getElementById('delete-step-1').style.display = 'block';
+    document.getElementById('delete-step-2').style.display = 'none';
+    document.getElementById('otp-input').value = '';
+    document.getElementById('btn-delete').disabled = false;
+    document.getElementById('btn-delete').textContent = 'Delete my account';
+    document.getElementById('delete-status').textContent = '';
+    document.getElementById('delete-status').className = 'status-msg';
+  }
+
+  // ── SIGN OUT ──
+  async function signOut(e) {
+    e.preventDefault();
+    await window.supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>
