@@ -345,7 +345,47 @@
 
     .drawer-body { padding: 20px; flex: 1; }
 
-    /* View toggle — pill switcher between host notes and guest responses */
+    /* Collapsible guest rows */
+    .guest-row {
+      border: 1px solid var(--divider);
+      border-radius: 12px; margin-bottom: 8px; overflow: hidden;
+    }
+    .guest-row-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; cursor: pointer;
+      background: var(--paper); transition: background 0.15s;
+      user-select: none;
+    }
+    .guest-row-header:hover { background: var(--bg); }
+    .guest-row-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(201,168,76,0.15);
+      border: 1px solid rgba(201,168,76,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      font-weight: 500; color: var(--brown); flex-shrink: 0;
+    }
+    .guest-row-name {
+      font-size: 0.9rem; font-weight: 500; color: var(--brown);
+      margin-left: 10px; flex: 1;
+    }
+    .guest-row-arrow {
+      font-size: 0.65rem; color: var(--mid);
+      transition: transform 0.2s;
+    }
+    .guest-row.open .guest-row-arrow { transform: rotate(180deg); }
+    .guest-row-body {
+      display: none; padding: 12px 14px;
+      border-top: 1px solid var(--divider);
+      background: var(--paper);
+    }
+    .guest-row.open .guest-row-body { display: block; }
+    .guest-coffee-name {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 6px; margin-top: 10px; display: block;
+    }
+    .guest-coffee-name:first-child { margin-top: 0; }
     .drawer-toggle {
       display: flex; background: var(--bg);
       border-radius: 10px; padding: 3px;
@@ -935,24 +975,31 @@
 
         if (!error && count > 0) {
           let guestHtml = '';
-          responses.forEach(r => {
-            guestHtml += `<p style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--brown);font-weight:500;margin-bottom:12px;margin-top:8px">${escHtml(r.guest_name)}</p>`;
+          responses.forEach((r, idx) => {
+            const initials = r.guest_name.trim().split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+            let bodyHtml = '';
             r.coffees.forEach(c => {
               const d = c.data || {};
-              const scores = d.scores || {};
-              const avg = avgScore(scores);
-              guestHtml += `<div class="drawer-coffee"><div class="drawer-coffee-header"><span class="drawer-coffee-name">${escHtml(c.name)}</span>${avg !== null ? `<span class="drawer-score-badge">${avg.toFixed(1)}</span>` : ''}</div>`;
-              if (Object.keys(scores).length) {
-                guestHtml += `<div class="drawer-score-bars">${Object.entries(scores).map(([attr,val]) => `<div class="score-bar-row"><span class="score-bar-label">${attr}</span><div class="score-bar-track"><div class="score-bar-fill" style="width:${(val/10)*100}%"></div></div><span class="score-bar-val">${val}</span></div>`).join('')}</div>`;
-              }
+              bodyHtml += `<span class="guest-coffee-name">${escHtml(c.name)}</span>`;
               if (d.flavours?.length) {
-                guestHtml += `<div class="drawer-divider"></div><span class="drawer-section-label">Flavour notes</span><div class="drawer-flavour-tags">${d.flavours.map(f=>`<span class="drawer-flavour-tag">${escHtml(f)}</span>`).join('')}</div>`;
+                bodyHtml += `<div class="drawer-flavour-tags" style="margin-bottom:6px">${d.flavours.map(f=>`<span class="drawer-flavour-tag">${escHtml(f)}</span>`).join('')}</div>`;
               }
               if (d.notes) {
-                guestHtml += `<div class="drawer-divider"></div><span class="drawer-section-label">Tasting notes</span><p style="font-size:0.85rem;color:var(--mid);font-style:italic;line-height:1.65">${escHtml(d.notes)}</p>`;
+                bodyHtml += `<p style="font-size:0.82rem;color:var(--mid);font-style:italic;line-height:1.6;margin-top:4px">${escHtml(d.notes)}</p>`;
               }
-              guestHtml += `</div>`;
+              if (!d.flavours?.length && !d.notes) {
+                bodyHtml += `<p style="font-size:0.82rem;color:var(--mid);">No notes recorded.</p>`;
+              }
             });
+            guestHtml += `
+              <div class="guest-row" id="guest-row-${idx}">
+                <div class="guest-row-header" onclick="toggleGuestRow(${idx})">
+                  <div class="guest-row-avatar">${escHtml(initials)}</div>
+                  <span class="guest-row-name">${escHtml(r.guest_name)}</span>
+                  <span class="guest-row-arrow">▼</span>
+                </div>
+                <div class="guest-row-body">${bodyHtml}</div>
+              </div>`;
           });
           document.getElementById('drawer-guest-content').innerHTML = guestHtml;
         } else {
@@ -962,6 +1009,10 @@
         console.error('Error fetching guest responses:', e.message);
       }
     }
+  }
+
+  function toggleGuestRow(idx) {
+    document.getElementById(`guest-row-${idx}`).classList.toggle('open');
   }
 
   function switchDrawerView(view) {
