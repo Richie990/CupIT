@@ -281,16 +281,21 @@
 <script>
   // ── AUTH CHECK ──
   async function init() {
-    const { data: { session } } = await window.supabaseClient.auth.getSession();
-    if (!session) { window.location.href = 'signup.html'; return; }
-
-    // If user has returned via the delete confirmation magic link, complete deletion
     const params = new URLSearchParams(window.location.search);
-    if (params.get('delete') === '1' && sessionStorage.getItem('pending_delete')) {
-      await completeDelete();
+    const isDeleteReturn = params.get('delete') === '1' && sessionStorage.getItem('pending_delete');
+
+    if (isDeleteReturn) {
+      // Wait for Supabase to process the magic link and establish the session
+      window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          await completeDelete();
+        }
+      });
       return;
     }
 
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) { window.location.href = 'signup.html'; return; }
     loadProfile(session.user);
   }
 
