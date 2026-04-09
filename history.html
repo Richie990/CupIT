@@ -723,11 +723,6 @@
       if (dateFrom && s.date < dateFrom) return false;
       if (dateTo   && s.date > dateTo)   return false;
 
-      if (avg !== null) {
-        if (scoreMin !== null && avg < scoreMin) return false;
-        if (scoreMax !== null && avg > scoreMax) return false;
-      }
-
       return true;
     });
   }
