@@ -467,19 +467,24 @@
     .drawer-footer {
       padding: 16px 20px 28px;
       border-top: 1px solid var(--divider);
-      display: flex; gap: 10px;
+      display: flex; gap: 10px; align-items: center;
+      justify-content: space-between;
     }
     .drawer-btn {
-      flex: 1; padding: 12px;
+      padding: 12px 18px;
       border-radius: var(--r); border: none; cursor: pointer;
       font-family: 'DM Mono', monospace; font-size: 0.62rem;
       letter-spacing: 0.08em; text-transform: uppercase;
-      transition: all 0.2s;
+      transition: all 0.2s; white-space: nowrap;
     }
     .drawer-btn-primary { background: #e8e4d9; color: #1a2319; }
     .drawer-btn-primary:hover { background: #ffffff; }
     .drawer-btn-ghost { background: transparent; border: 1.5px solid var(--divider); color: var(--mid); }
     .drawer-btn-ghost:hover { border-color: var(--brown); color: var(--brown); }
+    @media (max-width: 480px) {
+      .drawer-footer { flex-wrap: wrap; }
+      .drawer-btn { flex: 1; text-align: center; }
+    }
 
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(6px); }
@@ -592,7 +597,6 @@
     <button class="drawer-btn drawer-btn-ghost" onclick="closeDrawer()">Close</button>
     <button class="drawer-btn drawer-btn-ghost" id="btn-end-session" onclick="endSession()" style="display:none;color:#c0392b;border-color:#c0392b">End session</button>
     <button class="drawer-btn drawer-btn-ghost" id="btn-delete-session" onclick="deleteSession()">Delete</button>
-    <button class="drawer-btn drawer-btn-primary" onclick="reopenSession()">Re-cup this →</button>
   </div>
 </div>
 
