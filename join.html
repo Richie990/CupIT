@@ -575,7 +575,20 @@
 
   // ── SUBMIT ──
   async function submitSession() {
-    saveCurrentCoffeeData();
+    // Save all coffees — not just the current one
+    const total = sessionData.coffees.length;
+    for (let i = 0; i < total; i++) {
+      const params = new Set(sessionData.params_active || []);
+      const data   = {};
+      if (params.has('flavours')) {
+        data.flavours = [...flavourPicks[i]];
+      }
+      if (params.has('notes')) {
+        const el = document.getElementById(`notes-${i}`);
+        if (el) data.notes = el.value.trim();
+      }
+      guestCoffees[i].data = data;
+    }
 
     const btn = document.getElementById('btn-submit');
     btn.disabled = true;
