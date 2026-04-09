@@ -334,7 +334,7 @@
     .footer-links a:hover { color: var(--light); }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
   <script src="config.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.json" />
@@ -603,7 +603,6 @@
     try {
       // Create the auth account in Supabase
       const token = turnstile.getResponse();
-      console.log('Turnstile token:', token ? token.slice(0,20)+'...' : 'EMPTY');
       const { data, error } = await window.supabaseClient.auth.signUp({
         email: email.value.trim(),
         password: pw.value,
@@ -612,7 +611,6 @@
           captchaToken: token,
         }
       });
-      console.log('Signup result — error:', error?.message, '| user:', data?.user?.id, '| session:', !!data?.session);
 
       if (error) {
         showFormError(error.message);

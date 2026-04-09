@@ -45,6 +45,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
   <script src="config.js"></script>
   <style>
     :root {
@@ -275,6 +276,7 @@
       </button>
     </div>
 
+    <div class="cf-turnstile" data-sitekey="0x4AAAAAAC23Y7i7OLJfcq7R" data-theme="light" data-size="invisible" style="margin-top:8px"></div>
     <p class="status-msg" id="delete-status"></p>
   </div>
 
@@ -439,11 +441,13 @@
       if (!user) { window.location.href = 'signup.html'; return; }
 
       // Send magic link — user clicks it and lands back here with a valid session
+      const token = turnstile.getResponse();
       const { error } = await window.supabaseClient.auth.signInWithOtp({
         email:   user.email,
         options: {
           shouldCreateUser: false,
           emailRedirectTo:  'https://richie990.github.io/CupIT/account.html?delete=1',
+          captchaToken:     token,
         },
       });
 
