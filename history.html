@@ -118,9 +118,19 @@
       font-family: 'DM Mono', monospace; font-size: 0.58rem;
       letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--mid); text-decoration: none; transition: color 0.2s;
+      white-space: nowrap;
     }
     .nav-link:hover { color: var(--brown); }
     .nav-link.active { color: var(--brown); font-weight: 500; }
+
+    @media (max-width: 560px) {
+      .nav-links { gap: 12px; }
+      .nav-link { font-size: 0.5rem; letter-spacing: 0.06em; }
+    }
+    @media (max-width: 400px) {
+      .nav-link:not(.active):not([onclick]) { display: none; }
+      .nav-link[onclick] { display: block; }
+    }
 
     /* ── PAGE HEADER ── */
     .page-header {
@@ -171,20 +181,7 @@
     .filter-input:focus { border-color: var(--accent); }
     .filter-input::placeholder { color: var(--light); font-style: italic; }
     .filter-search { flex: 1; min-width: 160px; }
-    .filter-select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239b6b47' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 10px center;
-      padding-right: 28px; cursor: pointer; min-width: 110px;
-    }
     .filter-sep { color: var(--light); font-size: 0.8rem; }
-    .btn-clear-filters {
-      font-family: 'DM Mono', monospace; font-size: 0.58rem;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      color: var(--light); background: none; border: none;
-      cursor: pointer; transition: color 0.2s; padding: 8px 4px;
-      white-space: nowrap;
-    }
-    .btn-clear-filters:hover { color: var(--accent); }
 
     /* ── TABLE ── */
     .table-wrap {
@@ -527,12 +524,7 @@
 <div class="filter-bar">
   <!-- Text search across session name and coffee names -->
   <input type="text" class="filter-input filter-search" id="filter-search"
-    placeholder="Search sessions or coffees..." oninput="debouncedRender()" />
-
-  <!-- Filter by roaster -->
-  <select class="filter-input filter-select" id="filter-roaster" onchange="renderTable()">
-    <option value="">All roasters</option>
-  </select>
+    placeholder="Search sessions, coffees or roasters..." oninput="debouncedRender()" />
 
   <!-- Filter by date range -->
   <input type="date" class="filter-input" id="filter-date-from"
@@ -542,8 +534,6 @@
     title="To date" onchange="renderTable()" />
 
 
-
-  <button class="btn-clear-filters" onclick="clearFilters()">Clear filters</button>
 </div>
 
 
@@ -643,7 +633,10 @@
 
 
     await loadSessions(session.user.id);
-    populateRoasterFilter();
+    // Default date range to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('filter-date-from').value = today;
+    document.getElementById('filter-date-to').value   = today;
     renderTable();
   }
 
@@ -677,23 +670,6 @@
       `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
   }
 
-  // Extracts all unique roaster values from session data
-  // and populates the roaster filter dropdown.
-  function populateRoasterFilter() {
-    const roasters = new Set();
-    sessions.forEach(s => {
-      s.coffees.forEach(c => {
-        if (c.data.roaster) roasters.add(c.data.roaster);
-      });
-    });
-    const sel = document.getElementById('filter-roaster');
-    [...roasters].sort().forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r; opt.textContent = r;
-      sel.appendChild(opt);
-    });
-  }
-
   // ══════════════════════════════════════════════════════════
   //  FILTERING
   //  All filters are AND'd — a session must pass all active
@@ -701,22 +677,16 @@
   // ══════════════════════════════════════════════════════════
   function applyFilters() {
     const search   = document.getElementById('filter-search').value.trim().toLowerCase();
-    const roaster  = document.getElementById('filter-roaster').value;
     const dateFrom = document.getElementById('filter-date-from').value;
     const dateTo   = document.getElementById('filter-date-to').value;
 
     return sessions.filter(s => {
-      // Text search: session name or any coffee name
+      // Text search: session name, coffee name or roaster
       if (search) {
-        const nameMatch  = s.name.toLowerCase().includes(search);
-        const coffeeMatch = s.coffees.some(c => c.name.toLowerCase().includes(search));
-        if (!nameMatch && !coffeeMatch) return false;
-      }
-
-      // Roaster filter: any coffee in the session must match
-      if (roaster) {
-        const match = s.coffees.some(c => c.data.roaster === roaster);
-        if (!match) return false;
+        const nameMatch    = s.name.toLowerCase().includes(search);
+        const coffeeMatch  = s.coffees.some(c => c.name.toLowerCase().includes(search));
+        const roasterMatch = s.coffees.some(c => (c.data.roaster || '').toLowerCase().includes(search));
+        if (!nameMatch && !coffeeMatch && !roasterMatch) return false;
       }
 
       // Date range filter
@@ -725,15 +695,6 @@
 
       return true;
     });
-  }
-
-  function clearFilters() {
-    track('history_filters_cleared');
-    document.getElementById('filter-search').value    = '';
-    document.getElementById('filter-roaster').value  = '';
-    document.getElementById('filter-date-from').value = '';
-    document.getElementById('filter-date-to').value   = '';
-    renderTable();
   }
 
   // Debounced version of renderTable for text inputs
