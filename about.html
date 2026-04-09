@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — About  (about.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    Public about page. Covers who built CupIT, why, the product
+    philosophy, and a feedback form that submits to Supabase.
+
+  SUPABASE CALLS:
+    INSERT feedback (public, no auth required)
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2319" />
+  <title>About — CupIT</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CupIT" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --bg:      #e8e4d9;
+      --paper:   #f0ede5;
+      --dark:    #1a2319;
+      --brown:   #2d3b2d;
+      --mid:     #8faa8b;
+      --light:   #8faa8b;
+      --accent:  #c9a84c;
+      --cream:   #e8e4d9;
+      --divider: rgba(45,59,45,0.12);
+      --r:       14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: var(--dark);
+      padding: 18px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 20px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(232,228,217,0.7); text-decoration: none;
+      transition: color 0.2s; white-space: nowrap;
+    }
+    .nav-link:hover { color: var(--cream); }
+    .nav-link.active { color: var(--cream); }
+    @media (max-width: 560px) {
+      .nav-links { gap: 12px; }
+      .nav-link { font-size: 0.5rem; letter-spacing: 0.06em; }
+    }
+
+    /* ── HERO ── */
+    .hero {
+      background: var(--dark);
+      padding: 52px 24px 64px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 60% at 50% 110%, rgba(201,168,76,0.2) 0%, transparent 65%);
+    }
+    .hero-content { position: relative; z-index: 1; max-width: 600px; margin: 0 auto; }
+    .hero-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 14px; display: block;
+    }
+    .hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 6vw, 3rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+    }
+    .hero h1 em { font-style: italic; color: var(--light); }
+
+    /* ── CONTENT ── */
+    .content {
+      flex: 1; max-width: 640px; width: 100%;
+      margin: 0 auto; padding: 52px 24px 80px;
+    }
+
+    /* About section */
+    .about-body {
+      font-size: 1.05rem; color: var(--brown);
+      line-height: 1.8; margin-bottom: 48px;
+    }
+    .about-body p { margin-bottom: 20px; }
+    .about-body p:last-child { margin-bottom: 0; }
+
+    /* Philosophy section */
+    .philosophy {
+      background: var(--dark);
+      border-radius: 20px; padding: 36px 32px;
+      margin-bottom: 52px; text-align: center;
+    }
+    .philosophy-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent); display: block; margin-bottom: 16px;
+    }
+    .philosophy-quote {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1rem, 3vw, 1.3rem);
+      font-style: italic; color: var(--cream);
+      line-height: 1.6; margin-bottom: 20px;
+    }
+    .philosophy-lines {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+      color: var(--light); line-height: 2;
+    }
+
+    /* Feedback form */
+    .feedback-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem; font-weight: 400;
+      color: var(--brown); margin-bottom: 6px;
+    }
+    .feedback-title em { font-style: italic; }
+    .feedback-sub {
+      font-size: 0.9rem; color: var(--mid);
+      margin-bottom: 28px; line-height: 1.6;
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block; font-family: 'DM Mono', monospace;
+      font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 6px;
+    }
+    .form-input, .form-textarea {
+      width: 100%; padding: 12px 16px;
+      background: var(--paper); border: 1.5px solid var(--divider);
+      border-radius: var(--r);
+      font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+      color: var(--dark); outline: none; transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-textarea:focus { border-color: var(--accent); }
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--light); font-style: italic; }
+    .form-textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+    .btn-submit {
+      width: 100%; padding: 15px;
+      background: var(--dark); color: var(--cream);
+      font-family: 'DM Mono', monospace; font-size: 0.68rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border: none; border-radius: 50px; cursor: pointer;
+      transition: background 0.2s; margin-top: 8px;
+    }
+    .btn-submit:hover { background: var(--brown); }
+    .btn-submit:disabled { opacity: 0.45; pointer-events: none; }
+    .form-status {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      text-align: center; margin-top: 12px; min-height: 16px;
+    }
+    .form-status.success { color: #2d4a26; }
+    .form-status.error   { color: #c0392b; }
+
+    footer {
+      background: var(--dark); padding: 28px 24px; text-align: center;
+    }
+    footer p {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(232,228,217,0.3);
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
+  <div class="nav-links">
+    <a href="index.html" class="nav-link">Home</a>
+    <a href="about.html" class="nav-link active">About</a>
+    <a href="guide.html" class="nav-link">Beginner's guide</a>
+    <a href="login.html" class="nav-link">Log in</a>
+    <a href="signup.html" class="nav-link">Sign up</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-content">
+    <span class="hero-tag">About</span>
+    <h1>About <em>CupIT</em></h1>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="about-body">
+    <p>I'm a coffee roaster. I needed a proper place to log my cuppings — something purpose-built, not a spreadsheet or a notebook that gets lost. So I built one. And once it existed, it felt wrong to keep it to myself.</p>
+    <p>CupIT is free and has no advertising.</p>
+    <p>If you have suggestions or improvements, reach out through the feedback form below. This is a community project and it only gets better with community input.</p>
+  </div>
+
+  <div class="philosophy">
+    <span class="philosophy-tag">Our philosophy</span>
+    <p class="philosophy-quote">"Because taste is subjective and scores create bias, you will find no scoring on this site."</p>
+    <p class="philosophy-lines">
+      We cup to learn.<br>
+      We cup for quality.<br>
+      We cup for community.
+    </p>
+  </div>
+
+  <h2 class="feedback-title">Leave <em>feedback</em></h2>
+  <p class="feedback-sub">Suggestions, bug reports, ideas — all welcome.</p>
+
+  <div class="form-group">
+    <label class="form-label" for="fb-name">Your name <span style="color:var(--light);font-size:0.52rem">Optional</span></label>
+    <input type="text" id="fb-name" class="form-input" placeholder="First name is fine" />
+  </div>
+  <div class="form-group">
+    <label class="form-label" for="fb-email">Email <span style="color:var(--light);font-size:0.52rem">Optional — if you'd like a reply</span></label>
+    <input type="email" id="fb-email" class="form-input" placeholder="you@example.com" />
+  </div>
+  <div class="form-group">
+    <label class="form-label" for="fb-message">Message <span style="color:#c0392b;font-size:0.52rem">Required</span></label>
+    <textarea id="fb-message" class="form-textarea" placeholder="Tell us what you think..."></textarea>
+  </div>
+  <div class="cf-turnstile" data-sitekey="0x4AAAAAAC23Y7i7OLJfcq7R" data-theme="light" style="margin-bottom:12px"></div>
+  <button class="btn-submit" id="btn-submit" onclick="submitFeedback()">Send feedback →</button>
+  <p class="form-status" id="form-status"></p>
+
+</div>
+
+<footer>
+  <p>© 2026 CupIT. All rights reserved.</p>
+</footer>
+
+<script>
+  track('page_view', { page: 'about' });
+
+  async function submitFeedback() {
+    const message = document.getElementById('fb-message').value.trim();
+    const status  = document.getElementById('form-status');
+    const btn     = document.getElementById('btn-submit');
+
+    if (!message) {
+      status.textContent = 'Please enter a message.';
+      status.className   = 'form-status error';
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = 'Sending...';
+    status.textContent = '';
+    status.className   = 'form-status';
+
+    // Verify Turnstile token
+    const token = turnstile.getResponse();
+    if (!token) {
+      status.textContent = 'Please complete the captcha.';
+      status.className   = 'form-status error';
+      btn.disabled       = false;
+      btn.textContent    = 'Send feedback →';
+      return;
+    }
+
+    try {
+      const { error } = await window.supabaseClient
+        .from('feedback')
+        .insert({
+          name:    document.getElementById('fb-name').value.trim()  || null,
+          email:   document.getElementById('fb-email').value.trim() || null,
+          message: message,
+        });
+
+      if (error) {
+        console.error('Feedback error:', error.message);
+        status.textContent = 'Something went wrong. Please try again.';
+        status.className   = 'form-status error';
+        turnstile.reset();
+        btn.disabled       = false;
+        btn.textContent    = 'Send feedback →';
+        return;
+      }
+
+      // Clear form and show success
+      document.getElementById('fb-name').value    = '';
+      document.getElementById('fb-email').value   = '';
+      document.getElementById('fb-message').value = '';
+      turnstile.reset();
+      status.textContent = 'Thanks — feedback received ✓';
+      status.className   = 'form-status success';
+      btn.disabled       = false;
+      btn.textContent    = 'Send feedback →';
+
+    } catch(e) {
+      console.error(e);
+      status.textContent = 'Something went wrong. Please try again.';
+      status.className   = 'form-status error';
+      btn.disabled       = false;
+      btn.textContent    = 'Send feedback →';
+    }
+  }
+</script>
+</body>
+</html>
