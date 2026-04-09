@@ -524,7 +524,7 @@
 <div class="filter-bar">
   <!-- Text search across session name and coffee names -->
   <input type="text" class="filter-input filter-search" id="filter-search"
-    placeholder="Search sessions, coffees or roasters..." oninput="debouncedRender()" />
+    placeholder="Search by session, coffee, origin, variety, producer, roaster..." oninput="debouncedRender()" />
 
   <!-- Filter by date range -->
   <input type="date" class="filter-input" id="filter-date-from"
@@ -681,12 +681,16 @@
     const dateTo   = document.getElementById('filter-date-to').value;
 
     return sessions.filter(s => {
-      // Text search: session name, coffee name or roaster
+      // Text search: session name, coffee name, origin, variety, producer, process, roaster
       if (search) {
-        const nameMatch    = s.name.toLowerCase().includes(search);
-        const coffeeMatch  = s.coffees.some(c => c.name.toLowerCase().includes(search));
-        const roasterMatch = s.coffees.some(c => (c.data.roaster || '').toLowerCase().includes(search));
-        if (!nameMatch && !coffeeMatch && !roasterMatch) return false;
+        const nameMatch     = s.name.toLowerCase().includes(search);
+        const coffeeMatch   = s.coffees.some(c => c.name.toLowerCase().includes(search));
+        const roasterMatch  = s.coffees.some(c => (c.data.roaster   || '').toLowerCase().includes(search));
+        const originMatch   = s.coffees.some(c => (c.data.origin    || '').toLowerCase().includes(search));
+        const varietyMatch  = s.coffees.some(c => (c.data.variety   || '').toLowerCase().includes(search));
+        const producerMatch = s.coffees.some(c => (c.data.producer  || '').toLowerCase().includes(search));
+        const processMatch  = s.coffees.some(c => (c.data.process   || '').toLowerCase().includes(search));
+        if (!nameMatch && !coffeeMatch && !roasterMatch && !originMatch && !varietyMatch && !producerMatch && !processMatch) return false;
       }
 
       // Date range filter

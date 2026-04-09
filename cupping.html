@@ -509,16 +509,24 @@
   // 'type' controls how the field is rendered in buildPanelFields():
   //   text     → plain text input
   //   select   → dropdown (options array required)
-    //   flavours → the interactive flavour wheel picker
+  //   flavours → the interactive flavour wheel picker
   //   textarea → multi-line free text
   const ALL_PARAMS = [
-    { id:'origin',   label:'Origin',        type:'text',     placeholder:'e.g. Ethiopia, Yirgacheffe' },
-    { id:'roaster',  label:'Roaster',       type:'text',     placeholder:'Who roasted it?' },
-    { id:'process',  label:'Process',       type:'select',   options:['Washed','Natural','Honey','Anaerobic','Other'] },
-    { id:'roast',    label:'Roast Level',   type:'select',   options:['Light','Medium-Light','Medium','Medium-Dark','Dark'] },
-    { id:'brew',     label:'Brew Method',   type:'select',   options:['Cupping','Pour Over','AeroPress','French Press','Espresso','Cold Brew'] },
-    { id:'flavours', label:'Flavour Notes', type:'flavours' },
-    { id:'notes',    label:'Tasting Notes', type:'textarea', placeholder:'Free-form impressions...' },
+    // ── Default ON ──
+    { id:'origin',    label:'Origin',       type:'text',   placeholder:'e.g. Ethiopia, Yirgacheffe' },
+    { id:'variety',   label:'Variety',      type:'text',   placeholder:'e.g. Bourbon, Gesha, Typica' },
+    { id:'process',   label:'Process',      type:'select', options:['Washed','Natural','Honey','Anaerobic','Other'] },
+    { id:'roaster',   label:'Roaster',      type:'text',   placeholder:'Who roasted it?' },
+    { id:'producer',  label:'Producer',     type:'text',   placeholder:'Farm or producer name' },
+    { id:'flavours',  label:'Flavour Notes',type:'flavours' },
+    { id:'notes',     label:'Tasting Notes',type:'textarea',placeholder:'Free-form impressions...' },
+    // ── Default OFF ──
+    { id:'roast',     label:'Roast Level',  type:'select', options:['Light','Medium-Light','Medium','Medium-Dark','Dark'] },
+    { id:'harvest',   label:'Harvest Year', type:'text',   placeholder:'e.g. 2024' },
+    { id:'body',      label:'Body',         type:'textarea',placeholder:'e.g. Silky, Syrupy, Full, Watery...' },
+    { id:'dry_aroma', label:'Dry Aroma',    type:'textarea',placeholder:'Aroma from dry grounds...' },
+    { id:'wet_aroma', label:'Wet Aroma',    type:'textarea',placeholder:'Aroma after adding water...' },
+    { id:'aftertaste',label:'Aftertaste',   type:'textarea',placeholder:'Finish length and quality...' },
   ];
 
   // WHEEL defines the flavour picker structure.
@@ -550,8 +558,9 @@
   let coffees = [];
 
   // activeParams tracks which fields the user toggled on in setup.
-  // Defaults to the three most commonly used fields.
-  let activeParams = new Set(['flavours','notes']);
+  // Default ON: origin, variety, process, roaster, producer, flavours, notes
+  // Default OFF: roast, harvest, body, dry_aroma, wet_aroma, aftertaste
+  let activeParams = new Set(['origin','variety','process','roaster','producer','flavours','notes']);
 
   let currentView = 'setup'; // tracks which view is showing
   let shareToken   = null;    // generated when setup completes, used for guest QR code
@@ -953,33 +962,29 @@
 
     coffees.forEach((c,i) => {
       const d = c.data;
-      const scores = d.scores || {};
-      const avg = Object.keys(scores).length
-        ? (Object.values(scores).reduce((a,b)=>a+b,0) / Object.keys(scores).length).toFixed(1)
-        : null;
 
       html += `<div class="review-coffee">
         <div class="review-coffee-header">
           <span class="review-coffee-name">${escHtml(c.name)}</span>
-          ${avg ? `<span class="review-score-badge">${avg}</span>` : ''}
         </div>`;
 
-      // Render text/select fields
-      ['origin','roaster','process','roast','brew'].forEach(k => {
+      // Render all text/select/textarea fields except flavours and notes (handled separately)
+      const textFields = ['origin','variety','process','roaster','producer','roast','harvest'];
+      textFields.forEach(k => {
         if (activeParams.has(k) && d[k]) {
-          const label = ALL_PARAMS.find(p=>p.id===k)?.label||k;
+          const label = ALL_PARAMS.find(p=>p.id===k)?.label || k;
           html += `<div class="review-row"><span class="review-key">${label}</span><span class="review-val">${escHtml(d[k])}</span></div>`;
         }
       });
 
-      if (activeParams.has('score') && Object.keys(scores).length) {
-        html += `<div class="review-row"><span class="review-key">Scores</span><span class="review-val">${Object.entries(scores).map(([k,v])=>`${k} ${v}`).join(' · ')}</span></div>`;
-      }
-
-      // Render free-text notes
-      if (activeParams.has('notes') && d.notes) {
-        html += `<div class="review-row" style="flex-direction:column;gap:4px"><span class="review-key">Notes</span><span class="review-val" style="color:var(--mid);font-style:italic;font-size:0.88rem">${escHtml(d.notes)}</span></div>`;
-      }
+      // Render textarea fields (body, dry_aroma, wet_aroma, aftertaste, notes)
+      const textareaFields = ['dry_aroma','wet_aroma','body','aftertaste','notes'];
+      textareaFields.forEach(k => {
+        if (activeParams.has(k) && d[k]) {
+          const label = ALL_PARAMS.find(p=>p.id===k)?.label || k;
+          html += `<div class="review-row" style="flex-direction:column;gap:4px"><span class="review-key">${label}</span><span class="review-val" style="color:var(--mid);font-style:italic;font-size:0.88rem">${escHtml(d[k])}</span></div>`;
+        }
+      });
 
       // Render flavour tags
       if (activeParams.has('flavours') && d.flavours?.length) {
@@ -1144,7 +1149,7 @@
   function resetAll() {
     coffees = [];
     shareToken = null;
-    activeParams = new Set(['flavours','notes']);
+    activeParams = new Set(['origin','variety','process','roaster','producer','flavours','notes']);
     useTimer = false;
     clearInterval(timerInterval);
     timerRunning = false;
