@@ -603,6 +603,7 @@
     try {
       // Create the auth account in Supabase
       const token = turnstile.getResponse();
+      console.log('Turnstile token:', token ? token.slice(0,20)+'...' : 'EMPTY');
       const { data, error } = await window.supabaseClient.auth.signUp({
         email: email.value.trim(),
         password: pw.value,
@@ -611,6 +612,7 @@
           captchaToken: token,
         }
       });
+      console.log('Signup result — error:', error?.message, '| user:', data?.user?.id, '| session:', !!data?.session);
 
       if (error) {
         showFormError(error.message);
