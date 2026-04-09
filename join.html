@@ -192,16 +192,26 @@
       letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--mid); margin-bottom: 6px;
     }
-    .form-input, .form-textarea {
+    .form-input {
       width: 100%; padding: 11px 14px;
       background: var(--bg); border: 1.5px solid var(--divider);
       border-radius: var(--r);
       font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
       color: var(--dark); outline: none; transition: border-color 0.2s;
+      -webkit-appearance: none;
     }
-    .form-input:focus, .form-textarea:focus { border-color: var(--accent); }
-    .form-input::placeholder, .form-textarea::placeholder { color: var(--light); font-style: italic; }
-    .form-textarea { resize: vertical; min-height: 80px; line-height: 1.55; }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--light); font-style: italic; }
+    .form-textarea {
+      width: 100%; padding: 11px 14px;
+      background: var(--bg); border: 1.5px solid var(--divider);
+      border-radius: var(--r);
+      font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+      color: var(--dark); outline: none; transition: border-color 0.2s;
+      resize: vertical; min-height: 80px; line-height: 1.55;
+    }
+    .form-textarea:focus { border-color: var(--accent); }
+    .form-textarea::placeholder { color: var(--light); font-style: italic; }
 
 
     /* Flavour chips */
@@ -468,9 +478,65 @@
   function buildPanel(idx, params) {
     let html = `<div class="section-card">`;
 
+    // Text fields
+    const textFields = [
+      { id:'origin',   label:'Origin',       placeholder:'e.g. Ethiopia, Yirgacheffe' },
+      { id:'variety',  label:'Variety',      placeholder:'e.g. Bourbon, Gesha, Typica' },
+      { id:'producer', label:'Producer',     placeholder:'Farm or producer name' },
+      { id:'roaster',  label:'Roaster',      placeholder:'Who roasted it?' },
+      { id:'harvest',  label:'Harvest Year', placeholder:'e.g. 2024' },
+    ];
+    textFields.forEach(f => {
+      if (params.has(f.id)) {
+        html += `<div class="form-group">
+          <label class="form-label">${f.label}</label>
+          <input type="text" class="form-input" id="${f.id}-${idx}" placeholder="${f.placeholder}" />
+        </div>`;
+      }
+    });
+
+    // Process select
+    if (params.has('process')) {
+      html += `<div class="form-group">
+        <label class="form-label">Process</label>
+        <select class="form-input" id="process-${idx}">
+          <option value="">Select...</option>
+          ${['Washed','Natural','Honey','Anaerobic','Other'].map(o=>`<option>${o}</option>`).join('')}
+        </select>
+      </div>`;
+    }
+
+    // Roast level select
+    if (params.has('roast')) {
+      html += `<div class="form-group">
+        <label class="form-label">Roast Level</label>
+        <select class="form-input" id="roast-${idx}">
+          <option value="">Select...</option>
+          ${['Light','Medium-Light','Medium','Medium-Dark','Dark'].map(o=>`<option>${o}</option>`).join('')}
+        </select>
+      </div>`;
+    }
+
+    // Textarea fields
+    const textareaFields = [
+      { id:'dry_aroma',  label:'Dry Aroma',   placeholder:'Aroma from dry grounds...' },
+      { id:'wet_aroma',  label:'Wet Aroma',   placeholder:'Aroma after adding water...' },
+      { id:'body',       label:'Body',        placeholder:'e.g. Silky, Syrupy, Full, Watery...' },
+      { id:'aftertaste', label:'Aftertaste',  placeholder:'Finish length and quality...' },
+      { id:'notes',      label:'Tasting notes',placeholder:'Free-form impressions...' },
+    ];
+    textareaFields.forEach(f => {
+      if (params.has(f.id)) {
+        html += `<div class="form-group">
+          <label class="form-label">${f.label}</label>
+          <textarea class="form-textarea" id="${f.id}-${idx}" placeholder="${f.placeholder}"></textarea>
+        </div>`;
+      }
+    });
+
     // Flavours
     if (params.has('flavours')) {
-      html += `<span class="section-card-title" style="display:block">Flavour notes</span>`;
+      html += `<div style="margin-top:8px"><span class="section-card-title" style="display:block;margin-bottom:10px">Flavour notes</span>`;
       html += `<div class="flavour-families">`;
       WHEEL.forEach(f => {
         html += `<button class="flavour-family-btn" id="family-${idx}-${f.id}" onclick="toggleFamily(${idx},'${f.id}')">${f.emoji} ${f.name}</button>`;
@@ -483,16 +549,7 @@
         });
         html += `</div>`;
       });
-      html += `<div class="flavour-selected-wrap" id="selected-${idx}"></div>`;
-    }
-
-    // Notes
-    if (params.has('notes')) {
-      html += `
-        <div class="form-group" style="margin-top:${(params.has('score') || params.has('flavours')) ? '16px' : '0'}">
-          <label class="form-label">Tasting notes</label>
-          <textarea class="form-textarea" id="notes-${idx}" placeholder="Free-form impressions..."></textarea>
-        </div>`;
+      html += `<div class="flavour-selected-wrap" id="selected-${idx}"></div></div>`;
     }
 
     html += `</div>`;
@@ -580,13 +637,35 @@
     for (let i = 0; i < total; i++) {
       const params = new Set(sessionData.params_active || []);
       const data   = {};
+
+      // Text fields
+      ['origin','variety','producer','roaster','harvest'].forEach(k => {
+        if (params.has(k)) {
+          const el = document.getElementById(`${k}-${i}`);
+          if (el && el.value.trim()) data[k] = el.value.trim();
+        }
+      });
+
+      // Select fields
+      ['process','roast'].forEach(k => {
+        if (params.has(k)) {
+          const el = document.getElementById(`${k}-${i}`);
+          if (el && el.value) data[k] = el.value;
+        }
+      });
+
+      // Textarea fields
+      ['dry_aroma','wet_aroma','body','aftertaste','notes'].forEach(k => {
+        if (params.has(k)) {
+          const el = document.getElementById(`${k}-${i}`);
+          if (el && el.value.trim()) data[k] = el.value.trim();
+        }
+      });
+
       if (params.has('flavours')) {
         data.flavours = [...flavourPicks[i]];
       }
-      if (params.has('notes')) {
-        const el = document.getElementById(`notes-${i}`);
-        if (el) data.notes = el.value.trim();
-      }
+
       guestCoffees[i].data = data;
     }
 
