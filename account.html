@@ -202,6 +202,60 @@
     }
     .legal-links a:hover { color: var(--brown); }
 
+    /* Form fields (used in welcome profile completion) */
+    .form-label {
+      display: block; font-family: 'DM Mono', monospace;
+      font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%; padding: 11px 14px;
+      background: var(--bg); border: 1.5px solid var(--divider);
+      border-radius: var(--r);
+      font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+      color: var(--dark); outline: none; transition: border-color 0.2s;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--light); font-style: italic; }
+
+    /* Welcome / profile completion card */
+    .welcome-card {
+      background: var(--dark);
+      border-radius: 18px; padding: 28px;
+      margin-bottom: 4px;
+    }
+    .welcome-card-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--accent); display: block; margin-bottom: 10px;
+    }
+    .welcome-card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.3rem; font-weight: 400;
+      color: var(--cream); line-height: 1.3; margin-bottom: 8px;
+    }
+    .welcome-card h2 em { font-style: italic; color: var(--light); }
+    .welcome-card p {
+      font-size: 0.88rem; color: rgba(232,228,217,0.7);
+      line-height: 1.65; margin-bottom: 0;
+    }
+    .use-selector { display: flex; gap: 10px; margin-top: 6px; }
+    .use-opt {
+      flex: 1; padding: 12px;
+      background: var(--bg); border: 1.5px solid var(--divider);
+      border-radius: var(--r); cursor: pointer; text-align: left;
+      transition: all 0.15s;
+    }
+    .use-opt:hover { border-color: var(--brown); }
+    .use-opt.selected { border-color: var(--accent); background: rgba(201,168,76,0.08); }
+    .use-opt-icon  { font-size: 1.2rem; display: block; margin-bottom: 4px; }
+    .use-opt-label {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--brown); display: block;
+    }
+    .use-opt-desc { font-size: 0.75rem; color: var(--mid); display: block; margin-top: 2px; }
+
     footer {
       background: var(--dark); padding: 24px; text-align: center;
     }
@@ -232,6 +286,69 @@
 </div>
 
 <main>
+
+  <!-- Welcome / profile completion (shown on ?welcome=1) -->
+  <div id="welcome-section" style="display:none">
+    <div class="welcome-card">
+      <span class="welcome-card-tag">Welcome to CupIT</span>
+      <h2>Let's set up your <em>profile</em></h2>
+      <p>Just a couple of details before you start logging.</p>
+    </div>
+    <div class="settings-card" style="margin-top:4px">
+      <span class="settings-card-title">Complete your profile</span>
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label" for="w-name">
+          Your name
+          <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;color:#c0392b;margin-left:4px">Required</span>
+        </label>
+        <input type="text" id="w-name" class="form-input" placeholder="First name is fine" autocomplete="given-name" />
+        <p class="form-error" id="w-name-error" style="display:none;font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.06em;text-transform:uppercase;color:#c0392b;margin-top:5px">Please enter your name</p>
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">
+          How will you use CupIT?
+          <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;color:#c0392b;margin-left:4px">Required</span>
+        </label>
+        <div class="use-selector">
+          <button type="button" class="use-opt" data-val="personal" onclick="selectUse(this)">
+            <span class="use-opt-icon">🏠</span>
+            <span class="use-opt-label">Personal</span>
+            <span class="use-opt-desc">Cupping at home</span>
+          </button>
+          <button type="button" class="use-opt" data-val="commercial" onclick="selectUse(this)">
+            <span class="use-opt-icon">☕</span>
+            <span class="use-opt-label">Commercial</span>
+            <span class="use-opt-desc">Professional use</span>
+          </button>
+        </div>
+        <p id="w-use-error" style="display:none;font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.06em;text-transform:uppercase;color:#c0392b;margin-top:5px">Please select one</p>
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label" for="w-occupation">
+          Occupation
+          <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;color:var(--light);margin-left:4px">Optional</span>
+        </label>
+        <input type="text" id="w-occupation" class="form-input" placeholder="e.g. Barista, Roaster, Home brewer..." />
+      </div>
+
+      <div class="form-group" style="margin-bottom:20px">
+        <label class="form-label" for="w-company">
+          Company
+          <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;color:var(--light);margin-left:4px">Optional</span>
+        </label>
+        <input type="text" id="w-company" class="form-input" placeholder="Roaster, café, importer..." />
+      </div>
+
+      <button class="btn-action btn-export" id="btn-save-welcome" onclick="saveWelcomeProfile()">Save and continue →</button>
+      <p class="status-msg" id="welcome-status"></p>
+    </div>
+  </div>
+
+  <!-- Normal account sections (hidden until profile complete) -->
+  <div id="account-section" style="display:none">
 
   <!-- Profile details -->
   <div class="settings-card">
@@ -280,6 +397,8 @@
     <p class="status-msg" id="delete-status"></p>
   </div>
 
+  </div><!-- end account-section -->
+
   <div class="legal-links">
     <a href="privacy.html">Privacy Policy</a>
     <a href="terms.html">Terms of Service</a>
@@ -292,29 +411,111 @@
 </footer>
 
 <script>
+  let selectedUse = '';
+
+  function selectUse(el) {
+    selectedUse = el.dataset.val;
+    document.querySelectorAll('.use-opt').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('w-use-error').style.display = 'none';
+  }
+
   // ── AUTH CHECK ──
   async function init() {
-    const params = new URLSearchParams(window.location.search);
-    const isDeleteReturn = params.get('delete') === '1';
+    const params         = new URLSearchParams(window.location.search);
+    const isDeleteReturn = params.get('delete')  === '1' && localStorage.getItem('pending_delete');
+    const isWelcome      = params.get('welcome') === '1';
 
     if (isDeleteReturn) {
-      // Wait for Supabase to process the magic link and establish the session
       window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
           await completeDelete();
         }
       });
-      // Also try immediately in case session is already established
       const { data: { session } } = await window.supabaseClient.auth.getSession();
-      if (session) {
-        await completeDelete();
-      }
+      if (session) await completeDelete();
       return;
     }
 
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session) { window.location.href = 'signup.html'; return; }
+
+    if (isWelcome) {
+      document.getElementById('welcome-section').style.display = 'block';
+      document.getElementById('account-section').style.display = 'none';
+      return;
+    }
+
+    // Safety net — if profile incomplete redirect to welcome
+    const { data: profile } = await window.supabaseClient
+      .from('profiles')
+      .select('name, use_type')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (!profile?.name || !profile?.use_type) {
+      window.location.href = 'account.html?welcome=1';
+      return;
+    }
+
+    document.getElementById('account-section').style.display = 'block';
     loadProfile(session.user);
+  }
+
+  // ── SAVE WELCOME PROFILE ──
+  async function saveWelcomeProfile() {
+    const name   = document.getElementById('w-name').value.trim();
+    const status = document.getElementById('welcome-status');
+    const btn    = document.getElementById('btn-save-welcome');
+    let valid = true;
+
+    if (!name) {
+      document.getElementById('w-name-error').style.display = 'block';
+      valid = false;
+    } else {
+      document.getElementById('w-name-error').style.display = 'none';
+    }
+    if (!selectedUse) {
+      document.getElementById('w-use-error').style.display = 'block';
+      valid = false;
+    }
+    if (!valid) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (!session) { window.location.href = 'signup.html'; return; }
+
+      const { error } = await window.supabaseClient
+        .from('profiles')
+        .update({
+          name:       name,
+          use_type:   selectedUse,
+          occupation: document.getElementById('w-occupation').value.trim() || null,
+          company:    document.getElementById('w-company').value.trim()    || null,
+        })
+        .eq('user_id', session.user.id);
+
+      if (error) {
+        console.error('Profile save error:', error.message);
+        status.textContent = 'Something went wrong. Please try again.';
+        status.className   = 'status-msg error';
+        btn.disabled       = false;
+        btn.textContent    = 'Save and continue →';
+        return;
+      }
+
+      window.location.href = 'dashboard.html';
+
+    } catch(e) {
+      console.error(e);
+      status.textContent = 'Something went wrong. Please try again.';
+      status.className   = 'status-msg error';
+      btn.disabled       = false;
+      btn.textContent    = 'Save and continue →';
+    }
   }
 
   // ── LOAD PROFILE ──

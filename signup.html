@@ -371,50 +371,6 @@
       <p class="success-body" id="success-body">We've sent a confirmation link to <strong id="success-email"></strong>. Click it to activate your account and start logging.</p>
     </div>
 
-    <!-- Shared personal info fields — same for both modes -->
-    <div id="shared-fields">
-      <div class="form-group">
-        <label class="form-label" for="f-name">Your name</label>
-        <input type="text" id="f-name" class="form-input" placeholder="First name is fine" autocomplete="given-name" />
-        <p class="form-error" id="f-name-error">Please enter your name</p>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="f-company">
-          Company
-          <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;color:var(--light);margin-left:6px;text-transform:uppercase">Optional</span>
-        </label>
-        <input type="text" id="f-company" class="form-input" placeholder="Roaster, café, importer..." autocomplete="organization" />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="f-occupation">
-          Occupation
-          <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;color:var(--light);margin-left:6px;text-transform:uppercase">Optional</span>
-        </label>
-        <input type="text" id="f-occupation" class="form-input" placeholder="e.g. Barista, Roaster, Home brewer..." autocomplete="job-title" />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Main reason for using CupIT</label>
-        <div class="use-selector" id="use-selector">
-          <button type="button" class="use-opt" data-val="personal" onclick="selectUse(this)">
-            <span class="use-icon">🏠</span>
-            <span class="use-label">Personal</span>
-            <span class="use-desc">Cupping at home for enjoyment</span>
-          </button>
-          <button type="button" class="use-opt" data-val="commercial" onclick="selectUse(this)">
-            <span class="use-icon">☕</span>
-            <span class="use-label">Commercial</span>
-            <span class="use-desc">Professional or business use</span>
-          </button>
-        </div>
-        <p class="form-error" id="f-use-error">Please select one</p>
-      </div>
-
-      <div class="form-divider"></div>
-    </div>
-
     <!-- Email/password form -->
     <div id="pw-form">
       <div class="form-group">
@@ -465,33 +421,6 @@
 <script>
   // Track page view on load
   track('page_view', { page: 'signup' });
-
-  let selectedUse = '';
-
-  function selectUse(el) {
-    selectedUse = el.dataset.val;
-    document.querySelectorAll('.use-opt').forEach(o => o.classList.remove('selected'));
-    el.classList.add('selected');
-    document.getElementById('f-use-error').classList.remove('show');
-  }
-
-  function validateSharedFields() {
-    let valid = true;
-    const name = document.getElementById('f-name');
-    if (!name.value.trim()) {
-      name.classList.add('error');
-      document.getElementById('f-name-error').classList.add('show');
-      valid = false;
-    } else {
-      name.classList.remove('error');
-      document.getElementById('f-name-error').classList.remove('show');
-    }
-    if (!selectedUse) {
-      document.getElementById('f-use-error').classList.add('show');
-      valid = false;
-    }
-    return valid;
-  }
 
   function togglePassword(id, btn) {
     const input = document.getElementById(id);
@@ -558,7 +487,6 @@
 
   // ── PASSWORD SIGN UP ──
   async function submitPassword() {
-    if (!validateSharedFields()) return;
     clearFormError();
     let valid = true;
 
@@ -607,7 +535,7 @@
         email: email.value.trim(),
         password: pw.value,
         options: {
-          emailRedirectTo: 'https://richie990.github.io/CupIT/dashboard.html',
+          emailRedirectTo: 'https://richie990.github.io/CupIT/account.html?welcome=1',
           captchaToken: token,
         }
       });
@@ -619,17 +547,7 @@
         return;
       }
 
-      // Save the profile details to the profiles table
-      if (data.user) {
-        await window.supabaseClient.from('profiles').update({
-          name:       document.getElementById('f-name').value.trim(),
-          company:    document.getElementById('f-company').value.trim() || null,
-          occupation: document.getElementById('f-occupation').value.trim() || null,
-          use_type:   selectedUse,
-        }).eq('user_id', data.user.id);
-      }
-
-      track('signup_submitted', { method: 'password', use_type: selectedUse });
+      track('signup_submitted', { method: 'password' });
       showSuccess(email.value.trim());
 
     } catch (err) {
@@ -643,7 +561,6 @@
   // ── SUCCESS STATE ──
   function showSuccess(email) {
     document.getElementById('pw-form').style.display = 'none';
-    document.getElementById('shared-fields').style.display = 'none';
     document.querySelector('.form-terms').style.display = 'none';
     document.querySelector('.login-link').style.display = 'none';
     document.getElementById('success-email').textContent = email;

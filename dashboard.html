@@ -396,11 +396,22 @@
     if (!session) return;
 
     track('page_view', { page: 'dashboard' });
-  // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
-  window.supabaseClient.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') window.location.href = 'index.html';
-  });
+    // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
+    window.supabaseClient.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') window.location.href = 'index.html';
+    });
 
+    // Redirect to profile completion if name or use_type missing
+    const { data: profile } = await window.supabaseClient
+      .from('profiles')
+      .select('name, use_type')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (!profile?.name || !profile?.use_type) {
+      window.location.href = 'account.html?welcome=1';
+      return;
+    }
 
     setGreeting();
     await loadUser(session.user.id);
