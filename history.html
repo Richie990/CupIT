@@ -591,6 +591,7 @@
   <div class="drawer-footer">
     <button class="drawer-btn drawer-btn-ghost" onclick="closeDrawer()">Close</button>
     <button class="drawer-btn drawer-btn-ghost" id="btn-end-session" onclick="endSession()" style="display:none;color:#c0392b;border-color:#c0392b">End session</button>
+    <button class="drawer-btn drawer-btn-ghost" id="btn-delete-session" onclick="deleteSession()">Delete</button>
     <button class="drawer-btn drawer-btn-primary" onclick="reopenSession()">Re-cup this →</button>
   </div>
 </div>
@@ -944,6 +945,14 @@
   function closeDrawer() {
     document.getElementById('drawer').classList.remove('open');
     document.getElementById('drawer-overlay').classList.remove('open');
+    // Reset delete button state
+    clearTimeout(deleteArmTimer);
+    deleteArmed = false;
+    const btn = document.getElementById('btn-delete-session');
+    btn.textContent = 'Delete';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+    btn.disabled = false;
     setTimeout(() => {
       document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
       activeDrawerId = null;
@@ -978,6 +987,61 @@
   }
 
   // Placeholder — will navigate to cupping.html pre-populated
+  // Two-tap delete — first tap arms the button, second tap executes deletion
+  let deleteArmed = false;
+  let deleteArmTimer = null;
+
+  function deleteSession() {
+    const btn = document.getElementById('btn-delete-session');
+
+    if (!deleteArmed) {
+      // First tap — arm it
+      deleteArmed = true;
+      btn.textContent = 'Tap again to confirm';
+      btn.style.color = '#c0392b';
+      btn.style.borderColor = '#c0392b';
+
+      // Auto-disarm after 3 seconds if not confirmed
+      deleteArmTimer = setTimeout(() => {
+        deleteArmed = false;
+        btn.textContent = 'Delete';
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 3000);
+
+    } else {
+      // Second tap — execute deletion
+      clearTimeout(deleteArmTimer);
+      deleteArmed = false;
+      confirmDeleteSession();
+    }
+  }
+
+  async function confirmDeleteSession() {
+    const btn = document.getElementById('btn-delete-session');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .delete()
+      .eq('id', activeDrawerId);
+
+    if (error) {
+      console.error('Delete error:', error.message);
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+      return;
+    }
+
+    // Remove from local state and re-render
+    sessions = sessions.filter(s => s.id !== activeDrawerId);
+    document.getElementById('session-count').textContent =
+      `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
+    closeDrawer();
+    renderTable();
+  }
+
   function reopenSession() {
     alert('Re-cupping will be available once sessions are saved to your account.');
   }
