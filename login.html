@@ -5,20 +5,14 @@
   ═══════════════════════════════════════════════════════════════
 
   PURPOSE:
-    Login page for existing CupIT users. Offers two methods
-    matching the signup page:
-      1. Email + password
-      2. Magic link (passwordless)
-
+    Login page for existing CupIT users. Password-based login only.
     On successful login, redirects to dashboard.html.
     If already logged in, redirects to dashboard.html immediately.
 
   SUPABASE CALLS:
     signInWithPassword()  — email/password login
-    signInWithOtp()       — sends magic link to email
 
   FUTURE / TODO:
-    - Password reset flow (forgot password link → reset page)
     - "Remember me" / session persistence options
   ═══════════════════════════════════════════════════════════════
 -->
@@ -31,6 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script src="config.js"></script>
   <style>
     :root {
@@ -303,20 +298,7 @@
 <div class="form-container">
   <div class="form-card">
 
-    <!-- Mode tabs -->
-    <div class="mode-tabs" role="tablist">
-      <button class="mode-tab active" id="tab-pw" onclick="switchMode('password')" role="tab">Email & password</button>
-      <button class="mode-tab" id="tab-magic" onclick="switchMode('magic')" role="tab">Magic link</button>
-    </div>
-
-    <!-- Success state -->
-    <div class="success-state" id="success-state">
-      <span class="success-icon">✉️</span>
-      <h2 class="success-title">Check your <em>inbox</em></h2>
-      <p class="success-body" id="success-body">We've sent a magic link to your email. Click it to log straight in.</p>
-    </div>
-
-    <!-- Email/password form -->
+    <!-- Login form -->
     <div id="pw-form">
       <div class="form-group">
         <label class="form-label" for="pw-email">Email address</label>
@@ -337,29 +319,9 @@
 
       <a href="reset.html" class="forgot-link">Forgot password?</a>
 
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAAC23Y7i7OLJfcq7R" data-theme="light" style="margin-bottom:12px"></div>
       <button class="btn-submit" onclick="submitPassword()">Log in →</button>
 
-      <div class="or-divider"><span>or</span></div>
-
-      <button class="btn-submit ghost" onclick="switchMode('magic')">Send me a magic link instead</button>
-    </div>
-
-    <!-- Magic link form -->
-    <div id="magic-form" style="display:none">
-      <p style="font-size:0.9rem;color:var(--mid);line-height:1.7;margin-bottom:20px;font-weight:300">
-        Enter your email and we'll send you a secure link. Click it and you're straight in.
-      </p>
-      <div class="form-group">
-        <label class="form-label" for="magic-email">Email address</label>
-        <input type="email" id="magic-email" class="form-input"
-          placeholder="you@example.com" autocomplete="email" />
-        <p class="form-error" id="magic-email-error">Please enter a valid email address</p>
-      </div>
-      <button class="btn-submit" onclick="submitMagic()">Send magic link →</button>
-
-      <div class="or-divider"><span>or</span></div>
-
-      <button class="btn-submit ghost" onclick="switchMode('password')">Log in with password instead</button>
     </div>
 
     <p class="form-global-error" id="form-global-error"></p>
@@ -381,19 +343,6 @@
   })();
 
   track('page_view', { page: 'login' });
-
-  let currentMode = 'password';
-
-  // ── MODE SWITCHING ──
-  function switchMode(mode) {
-    track('login_mode_switched', { to: mode });
-    currentMode = mode;
-    document.getElementById('tab-pw').classList.toggle('active', mode === 'password');
-    document.getElementById('tab-magic').classList.toggle('active', mode === 'magic');
-    document.getElementById('pw-form').style.display    = mode === 'password' ? 'block' : 'none';
-    document.getElementById('magic-form').style.display = mode === 'magic'    ? 'block' : 'none';
-    clearFormError();
-  }
 
   // ── HELPERS ──
   function validateEmail(val) {
@@ -454,9 +403,11 @@
     setLoading(true);
 
     try {
+      const token = turnstile.getResponse();
       const { error } = await window.supabaseClient.auth.signInWithPassword({
         email:    email.value.trim(),
         password: pw.value,
+        options:  { captchaToken: token },
       });
 
       if (error) {
@@ -465,6 +416,7 @@
           ? 'Incorrect email or password. Please try again.'
           : error.message;
         showFormError(msg);
+        turnstile.reset();
         setLoading(false);
         return;
       }
@@ -480,57 +432,7 @@
     }
   }
 
-  // ── MAGIC LINK LOGIN ──
-  async function submitMagic() {
-    clearFormError();
 
-    const email = document.getElementById('magic-email');
-    if (!validateEmail(email.value)) {
-      email.classList.add('error');
-      document.getElementById('magic-email-error').classList.add('show');
-      return;
-    }
-    email.classList.remove('error');
-    document.getElementById('magic-email-error').classList.remove('show');
-
-    setLoading(true);
-
-    try {
-      const { error } = await window.supabaseClient.auth.signInWithOtp({
-        email: email.value.trim(),
-        options: {
-          emailRedirectTo: 'https://richie990.github.io/CupIT/dashboard.html',
-          shouldCreateUser: false, // login only — don't create new accounts here
-        }
-      });
-
-      if (error) {
-        showFormError(error.message);
-        setLoading(false);
-        return;
-      }
-
-      track('login_success', { method: 'magic' });
-      showSuccess(email.value.trim());
-
-    } catch (err) {
-      showFormError('Something went wrong. Please try again.');
-      console.error(err);
-      setLoading(false);
-    }
-  }
-
-  // ── SUCCESS STATE (magic link only) ──
-  function showSuccess(email) {
-    document.getElementById('pw-form').style.display = 'none';
-    document.getElementById('magic-form').style.display = 'none';
-    document.querySelector('.mode-tabs').style.display = 'none';
-    document.getElementById('form-global-error').style.display = 'none';
-    document.querySelector('.signup-link').style.display = 'none';
-    document.getElementById('success-body').innerHTML =
-      `We've sent a magic link to <strong>${email}</strong>. Click it to log straight into your dashboard.`;
-    document.getElementById('success-state').style.display = 'block';
-  }
 </script>
 </body>
 </html>

@@ -8,7 +8,7 @@
     Account creation page. Reached from familiar.html CTAs.
     Offers two sign-up methods selectable via tabs:
       1. Email + password  (traditional, with strength meter)
-      2. Magic link        (passwordless — just an email address)
+
 
   FORM FIELDS (shared across both methods):
     Name         Required. First name is fine.
@@ -19,16 +19,13 @@
   FORM FIELDS (method-specific):
     Password mode: email, password (with show/hide + strength bar),
                    confirm password.
-    Magic link mode: email only.
 
   KEY JAVASCRIPT:
-    switchMode(mode)         Toggles between 'password' and 'magic'
                              tab views. Shared fields stay visible.
     validateSharedFields()   Validates name and use-type before
                              allowing submission.
     submitPassword()         Validates all password fields, then
                              calls showSuccess() if valid.
-    submitMagic()            Validates email, then calls showSuccess().
     showSuccess(email, mode) Hides the form, shows the confirmation
                              state with appropriate message.
     checkStrength(pw)        Live password strength meter —
@@ -251,9 +248,6 @@
       letter-spacing: 0.1em; text-transform: uppercase; color: var(--light);
     }
 
-    /* ── MAGIC LINK SECTION ── */
-    .magic-section { display: none; }
-    .magic-section.active { display: block; }
     .pw-section { display: block; }
     .pw-section.hidden { display: none; }
 
@@ -340,6 +334,7 @@
     .footer-links a:hover { color: var(--light); }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script src="config.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.json" />
@@ -368,12 +363,6 @@
 
 <div class="form-container">
   <div class="form-card">
-
-    <!-- Mode tabs -->
-    <div class="mode-tabs" role="tablist">
-      <button class="mode-tab active" id="tab-pw" onclick="switchMode('password')" role="tab">Email & password</button>
-      <button class="mode-tab" id="tab-magic" onclick="switchMode('magic')" role="tab">Magic link</button>
-    </div>
 
     <!-- Success state (shown after submit) -->
     <div class="success-state" id="success-state">
@@ -454,29 +443,9 @@
         <p class="form-error" id="pw-confirm-error">Passwords don't match</p>
       </div>
 
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAAC23Y7i7OLJfcq7R" data-theme="light" style="margin-bottom:12px"></div>
       <button class="btn-submit" onclick="submitPassword()">Create account →</button>
 
-      <div class="or-divider"><span>or</span></div>
-
-      <p style="text-align:center;font-size:0.88rem;color:var(--mid);margin-bottom:4px">Prefer not to set a password?</p>
-      <button class="btn-submit" style="background:transparent;border:1.5px solid var(--divider);color:var(--brown);margin-top:0" onclick="switchMode('magic')">Send me a magic link instead</button>
-    </div>
-
-    <!-- Magic link form -->
-    <div id="magic-form" style="display:none">
-      <p style="font-size:0.95rem;color:var(--mid);line-height:1.7;margin-bottom:22px;font-weight:300">
-        Enter your email and we'll send you a secure link. Click it and you're straight in — no password needed, ever.
-      </p>
-      <div class="form-group">
-        <label class="form-label" for="magic-email">Email address</label>
-        <input type="email" id="magic-email" class="form-input" placeholder="you@example.com" autocomplete="email" />
-        <p class="form-error" id="magic-email-error">Please enter a valid email address</p>
-      </div>
-      <button class="btn-submit" onclick="submitMagic()">Send magic link →</button>
-
-      <div class="or-divider"><span>or</span></div>
-
-      <button class="btn-submit" style="background:transparent;border:1.5px solid var(--divider);color:var(--brown);margin-top:0" onclick="switchMode('password')">Set up a password instead</button>
     </div>
 
     <p class="form-terms">
@@ -497,7 +466,6 @@
   // Track page view on load
   track('page_view', { page: 'signup' });
 
-  let currentMode = 'password';
   let selectedUse = '';
 
   function selectUse(el) {
@@ -523,15 +491,6 @@
       valid = false;
     }
     return valid;
-  }
-
-  function switchMode(mode) {
-    track('signup_mode_switched', { to: mode });
-    currentMode = mode;
-    document.getElementById('tab-pw').classList.toggle('active', mode === 'password');
-    document.getElementById('tab-magic').classList.toggle('active', mode === 'magic');
-    document.getElementById('pw-form').style.display    = mode === 'password' ? 'block' : 'none';
-    document.getElementById('magic-form').style.display = mode === 'magic'    ? 'block' : 'none';
   }
 
   function togglePassword(id, btn) {
@@ -643,16 +602,19 @@
 
     try {
       // Create the auth account in Supabase
+      const token = turnstile.getResponse();
       const { data, error } = await window.supabaseClient.auth.signUp({
         email: email.value.trim(),
         password: pw.value,
         options: {
           emailRedirectTo: 'https://richie990.github.io/CupIT/dashboard.html',
+          captchaToken: token,
         }
       });
 
       if (error) {
         showFormError(error.message);
+        turnstile.reset();
         setLoading(false);
         return;
       }
@@ -668,53 +630,7 @@
       }
 
       track('signup_submitted', { method: 'password', use_type: selectedUse });
-      showSuccess(email.value.trim(), 'password');
-
-    } catch (err) {
-      showFormError('Something went wrong. Please try again.');
-      console.error(err);
-    }
-
-    setLoading(false);
-  }
-
-  // ── MAGIC LINK SIGN UP ──
-  async function submitMagic() {
-    if (!validateSharedFields()) return;
-    clearFormError();
-
-    const email = document.getElementById('magic-email');
-    if (!validateEmail(email.value)) {
-      email.classList.add('error');
-      document.getElementById('magic-email-error').classList.add('show');
-      return;
-    }
-    email.classList.remove('error');
-    document.getElementById('magic-email-error').classList.remove('show');
-
-    setLoading(true);
-
-    try {
-      // Send magic link via Supabase
-      const { error } = await window.supabaseClient.auth.signInWithOtp({
-        email: email.value.trim(),
-        options: {
-          emailRedirectTo: 'https://richie990.github.io/CupIT/dashboard.html',
-          shouldCreateUser: true,
-        }
-      });
-
-      if (error) {
-        showFormError(error.message);
-        setLoading(false);
-        return;
-      }
-
-      // Save profile details — we don't have a user id yet for magic link
-      // so we store them temporarily and save after the user clicks the link
-      // TODO: handle profile save on magic link callback
-      track('signup_submitted', { method: 'magic', use_type: selectedUse });
-      showSuccess(email.value.trim(), 'magic');
+      showSuccess(email.value.trim());
 
     } catch (err) {
       showFormError('Something went wrong. Please try again.');
@@ -725,19 +641,12 @@
   }
 
   // ── SUCCESS STATE ──
-  function showSuccess(email, mode) {
+  function showSuccess(email) {
     document.getElementById('pw-form').style.display = 'none';
-    document.getElementById('magic-form').style.display = 'none';
     document.getElementById('shared-fields').style.display = 'none';
-    document.querySelector('.mode-tabs').style.display = 'none';
     document.querySelector('.form-terms').style.display = 'none';
     document.querySelector('.login-link').style.display = 'none';
-
     document.getElementById('success-email').textContent = email;
-    if (mode === 'magic') {
-      document.getElementById('success-body').innerHTML =
-        `We've sent a magic link to <strong>${email}</strong>. Click it and you'll be straight into your account — no password needed.`;
-    }
     document.getElementById('success-state').style.display = 'block';
   }
 </script>
