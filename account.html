@@ -97,6 +97,14 @@
     }
     .nav-link:hover { color: var(--cream); }
     .nav-link.active { color: var(--cream); font-weight: 500; }
+    @media (max-width: 560px) {
+      .nav-links { gap: 12px; }
+      .nav-link { font-size: 0.5rem; letter-spacing: 0.06em; }
+    }
+    @media (max-width: 400px) {
+      .nav-link:not(.active):not([onclick]) { display: none; }
+      .nav-link[onclick] { display: block; }
+    }
 
     /* ── PAGE HEADER ── */
     .page-header {
