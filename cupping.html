@@ -100,7 +100,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'DM Sans', sans-serif;
-      background: var(--bg); color: var(--dark);
+      background: var(--cream); color: var(--dark);
       font-size: 15px; line-height: 1.5; min-height: 100vh;
     }
     body::after {
@@ -224,10 +224,10 @@
     .action-bar-inner { display: flex; gap: 10px; width: 100%; max-width: 600px; margin: 0 auto; }
     .btn-back-action { width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0; background: var(--paper); border: 1px solid var(--divider); color: var(--mid); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
     .btn-back-action:hover { border-color: var(--brown); color: var(--brown); }
-    .btn-primary-action { flex: 1; height: 52px; border-radius: 50px; background: var(--dark); color: var(--cream); font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; border: none; cursor: pointer; transition: all 0.2s; }
-    .btn-primary-action:hover { background: var(--brown); }
-    .btn-primary-action.save { background: var(--dark); color: var(--cream); }
-    .btn-primary-action.save:hover { background: var(--brown); }
+    .btn-primary-action { flex: 1; height: 52px; border-radius: 50px; background: var(--cream); color: var(--dark); font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-primary-action:hover { background: #ffffff; }
+    .btn-primary-action.save { background: var(--cream); color: var(--dark); }
+    .btn-primary-action.save:hover { background: #ffffff; }
 
     /* COFFEE TABS */
     .coffee-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 20px; scrollbar-width: none; }
@@ -285,8 +285,8 @@
     .saved-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; color: var(--brown); margin-bottom: 10px; }
     .saved-title em { font-style: italic; }
     .saved-sub { font-size: 0.9rem; color: var(--mid); line-height: 1.7; margin-bottom: 28px; }
-    .btn-new { display: inline-flex; align-items: center; gap: 8px; background: var(--dark); color: var(--cream); font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 28px; border-radius: 50px; border: none; cursor: pointer; transition: background 0.2s; }
-    .btn-new:hover { background: var(--brown); }
+    .btn-new { display: inline-flex; align-items: center; gap: 8px; background: var(--cream); color: var(--dark); font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 28px; border-radius: 50px; border: none; cursor: pointer; transition: background 0.2s; }
+    .btn-new:hover { background: #ffffff; }
 
     /* TIMER */
     .timer-toggle-btn {
@@ -488,7 +488,7 @@
       <div style="display:flex;gap:8px;align-items:center">
         <input id="share-link" type="text" readonly
           style="flex:1;padding:10px 14px;background:var(--bg);border:1.5px solid var(--divider);border-radius:10px;font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--brown);outline:none" />
-        <button onclick="copyLink()" style="padding:10px 16px;background:var(--dark);color:var(--cream);border:none;border-radius:10px;font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap" id="copy-btn">Copy</button>
+        <button onclick="copyLink()" style="padding:10px 16px;background:var(--cream);color:var(--dark);border:none;border-radius:10px;font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap" id="copy-btn">Copy</button>
       </div>
     </div>
 
