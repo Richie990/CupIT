@@ -410,7 +410,7 @@
   <!-- Live sessions -->
   <div class="live-section" id="live-section" style="display:none">
     <div class="recent-header">
-      <span class="recent-title" style="color:#4caf50">● Live now</span>
+      <span class="recent-title" id="live-section-title">● Live now</span>
     </div>
     <div id="live-list"></div>
   </div>
@@ -506,7 +506,7 @@
   async function loadRecentSessions(userId) {
     const { data, error } = await window.supabaseClient
       .from('cupping_sessions')
-      .select('id, session_name, session_date, coffees, status, share_token, is_active')
+      .select('id, session_name, session_date, coffees, status, share_token, is_active, scheduled_at, recurrence')
       .eq('user_id', userId)
       .order('id', { ascending: false })
       .limit(20);
@@ -518,12 +518,13 @@
 
     const all = data || [];
 
-    // Separate live sessions
-    const live    = all.filter(s => s.status === 'active' || s.is_active === true);
-    const recent  = all.filter(s => s.status !== 'active' && !s.is_active).slice(0, 5);
+    // Separate live and scheduled sessions
+    const live      = all.filter(s => s.status === 'active' || s.is_active === true);
+    const scheduled = all.filter(s => s.status === 'scheduled');
+    const recent    = all.filter(s => s.status !== 'active' && s.status !== 'scheduled' && !s.is_active).slice(0, 5);
 
-    // Render live sessions
-    renderLiveSessions(live, userId);
+    // Render live and scheduled sessions
+    renderLiveSessions(live, scheduled, userId);
 
     // Map and render recent sessions
     const sessions = recent.map(s => ({
@@ -536,22 +537,67 @@
     renderRecentSessions(sessions);
   }
 
-  // Renders the Live Now section
-  function renderLiveSessions(sessions, userId) {
+  // Renders the Live Now / Scheduled section
+  function renderLiveSessions(liveSessions, scheduledSessions, userId) {
     const section = document.getElementById('live-section');
     const list    = document.getElementById('live-list');
-    if (!sessions.length) { section.style.display = 'none'; return; }
+    if (!liveSessions.length && !scheduledSessions.length) { section.style.display = 'none'; return; }
     section.style.display = 'block';
-    list.innerHTML = sessions.map(s => `
+
+    const liveHtml = liveSessions.map(s => `
       <div class="live-card">
         <div class="live-dot"></div>
         <div class="live-info">
-          <p class="live-name">${escHtml(s.session_name || 'In progress...')}</p>
-          <p class="live-meta">${(s.coffees||[]).length} coffee${(s.coffees||[]).length!==1?'s':''}</p>
+          <p class="live-name">${escHtml(s.session_name || 'Untitled session')}</p>
+          <p class="live-meta">${(s.coffees||[]).length} coffee${(s.coffees||[]).length!==1?'s':''} · Live now</p>
         </div>
         <button class="live-end-btn" onclick="endLiveSession('${s.share_token}', '${s.id}', this)">End</button>
-      </div>
-    `).join('');
+      </div>`).join('');
+
+    const scheduledHtml = scheduledSessions.map(s => {
+      const schedLabel = s.scheduled_at
+        ? new Date(s.scheduled_at).toLocaleDateString('en-IE', { weekday:'short', day:'numeric', month:'short' }) + ' ' +
+          new Date(s.scheduled_at).toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' })
+        : 'Not yet started';
+      const recurLabel = s.recurrence && s.recurrence !== 'none' ? ` · 🔁 ${s.recurrence}` : '';
+      return `
+      <div class="live-card" style="opacity:0.8">
+        <div class="live-dot" style="background:var(--accent);box-shadow:0 0 0 3px rgba(201,168,76,0.2)"></div>
+        <div class="live-info">
+          <p class="live-name">${escHtml(s.session_name || 'Untitled session')}</p>
+          <p class="live-meta">${schedLabel}${recurLabel}</p>
+        </div>
+        <button class="live-end-btn" style="color:var(--mid);border-color:var(--divider)"
+          onclick="cancelScheduledSession('${s.share_token}', '${s.id}', this)">Cancel</button>
+      </div>`;
+    }).join('');
+
+    list.innerHTML = liveHtml + scheduledHtml;
+  }
+
+  // Cancels a scheduled session from the dashboard
+  async function cancelScheduledSession(shareToken, sessionId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Cancelling...';
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) return;
+
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .update({ status: 'cancelled', is_active: false })
+      .eq('id', sessionId)
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Cancel error:', error.message);
+      btn.disabled = false;
+      btn.textContent = 'Cancel';
+      return;
+    }
+
+    btn.closest('.live-card').remove();
+    const remaining = document.querySelectorAll('#live-list .live-card');
+    if (!remaining.length) document.getElementById('live-section').style.display = 'none';
   }
 
   // Ends a live session from the dashboard

@@ -399,7 +399,7 @@
       // Fetch session using share token — check is_active too
       const { data, error } = await window.supabaseClient
         .from('cupping_sessions')
-        .select('session_name, coffees, params_active, is_active, status, blind')
+        .select('session_name, coffees, params_active, is_active, status, blind, scheduled_at, recurrence')
         .eq('share_token', token)
         .single();
 
@@ -409,8 +409,15 @@
       if (data.status === 'scheduled') {
         document.getElementById('state-loading').style.display = 'none';
         document.getElementById('state-closed').style.display = 'block';
-        document.getElementById('header-title').innerHTML = 'Session <em>not started</em>';
-        document.getElementById('header-sub').textContent = "The host hasn't started this session yet — check back soon";
+        document.getElementById('header-title').innerHTML = 'Session <em>not started yet</em>';
+        let scheduledMsg = "The host hasn't started this session yet.";
+        if (data.scheduled_at) {
+          const d = new Date(data.scheduled_at);
+          const dateStr = d.toLocaleDateString('en-IE', { weekday:'long', day:'numeric', month:'long' });
+          const timeStr = d.toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' });
+          scheduledMsg = `This session is scheduled for ${dateStr} at ${timeStr}. Check back then.`;
+        }
+        document.getElementById('header-sub').textContent = scheduledMsg;
         return;
       }
       if (data.status === 'ended' || data.status === 'cancelled' || !data.is_active) {

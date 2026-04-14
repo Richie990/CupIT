@@ -652,7 +652,7 @@
   async function loadSessions(userId) {
     const { data, error } = await window.supabaseClient
       .from('cupping_sessions')
-      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status, blind')
+      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status, blind, scheduled_at, recurrence')
       .eq('user_id', userId)
       .order('id', { ascending: false });
 
@@ -671,7 +671,9 @@
       shareToken:  s.share_token || null,
       isActive:    s.is_active,
       status:      s.status || (s.is_active ? 'active' : 'ended'),
-      blind:       s.blind || false,
+      blind:        s.blind || false,
+      scheduledAt:  s.scheduled_at || null,
+      recurrence:   s.recurrence   || 'none',
     }));
 
     // Update session count in header
@@ -838,7 +840,7 @@
     // Populate drawer header
     document.getElementById('drawer-title').textContent = session.name;
     document.getElementById('drawer-meta').textContent  =
-      `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''} · ${statusBadge(session.status)}`;
+      `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''} · ${statusBadge(session.status)}${session.scheduledAt ? ' · 🕐 ' + formatScheduled(session.scheduledAt) : ''}${session.recurrence && session.recurrence !== 'none' ? ' · 🔁 ' + session.recurrence : ''}`;
 
     // Show End session button only for active sessions with a share token
     const endBtn = document.getElementById('btn-end-session');
@@ -965,6 +967,13 @@
       document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
       activeDrawerId = null;
     }, 350);
+  }
+
+  // Formats a scheduled_at ISO string to a readable date/time
+  function formatScheduled(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-IE', { day:'numeric', month:'short' }) + ' ' +
+           d.toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' });
   }
 
   // Returns a readable status badge string
