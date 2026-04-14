@@ -202,47 +202,63 @@
     .action-card.primary .action-card-arrow { color: rgba(26,35,25,0.4); }
     .action-card.primary:hover .action-card-arrow { color: #1a2319; }
 
-    /* ── LIVE NOW ── */
-    .live-section {
-      margin-bottom: 28px;
+    /* ── SESSION STATUS SECTIONS ── */
+    .status-section {
+      margin-bottom: 24px;
       animation: fadeUp 0.4s ease both; animation-delay: 0.15s;
     }
-    .live-card {
-      background: var(--dark); border-radius: var(--r);
-      padding: 16px 18px; display: flex; align-items: center;
-      gap: 14px; text-decoration: none; transition: opacity 0.2s;
-      margin-bottom: 8px;
+    .status-card {
+      background: var(--paper); border-radius: var(--r);
+      padding: 14px 16px; display: flex; align-items: center;
+      gap: 14px; margin-bottom: 8px;
+      border: 1px solid var(--divider);
+      transition: border-color 0.2s;
     }
-    .live-card:hover { opacity: 0.9; }
-    .live-dot {
-      width: 10px; height: 10px; border-radius: 50%;
-      background: #4caf50; flex-shrink: 0;
-      box-shadow: 0 0 0 3px rgba(76,175,80,0.25);
+    .status-card.live { border-left: 3px solid #4caf50; }
+    .status-card.today { border-left: 3px solid var(--accent); }
+    .status-card.upcoming { border-left: 3px solid var(--divider); }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .status-dot.live {
+      background: #4caf50;
+      box-shadow: 0 0 0 3px rgba(76,175,80,0.2);
       animation: pulse 2s infinite;
     }
+    .status-dot.today {
+      background: var(--accent);
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.2);
+    }
+    .status-dot.upcoming { background: var(--mid); }
     @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 0 3px rgba(76,175,80,0.25); }
-      50%       { box-shadow: 0 0 0 6px rgba(76,175,80,0.1); }
+      0%, 100% { box-shadow: 0 0 0 3px rgba(76,175,80,0.2); }
+      50%       { box-shadow: 0 0 0 6px rgba(76,175,80,0.08); }
     }
-    .live-info { flex: 1; min-width: 0; }
-    .live-name {
-      font-weight: 500; color: var(--cream); font-size: 0.88rem;
+    .status-info { flex: 1; min-width: 0; }
+    .status-name {
+      font-weight: 500; color: var(--brown); font-size: 0.88rem;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 3px;
     }
-    .live-meta {
+    .status-meta {
       font-family: 'DM Mono', monospace; font-size: 0.56rem;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      color: var(--mid); margin-top: 3px;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--light);
     }
-    .live-end-btn {
-      font-family: 'DM Mono', monospace; font-size: 0.56rem;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      color: #c0392b; background: rgba(192,57,43,0.12);
-      border: 1px solid rgba(192,57,43,0.25); border-radius: 20px;
-      padding: 6px 12px; cursor: pointer; transition: all 0.2s;
-      white-space: nowrap; flex-shrink: 0;
+    .status-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .status-btn {
+      font-family: 'DM Mono', monospace; font-size: 0.55rem;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      border-radius: 20px; padding: 6px 12px;
+      cursor: pointer; transition: all 0.15s;
+      white-space: nowrap; border: 1.5px solid;
     }
-    .live-end-btn:hover { background: rgba(192,57,43,0.2); }
+    .status-btn.start  { color: #2d4a26; border-color: rgba(45,74,38,0.3); background: rgba(45,74,38,0.07); }
+    .status-btn.start:hover  { background: rgba(45,74,38,0.14); }
+    .status-btn.end    { color: #c0392b; border-color: rgba(192,57,43,0.25); background: rgba(192,57,43,0.07); }
+    .status-btn.end:hover    { background: rgba(192,57,43,0.14); }
+    .status-btn.cancel { color: var(--mid); border-color: var(--divider); background: transparent; }
+    .status-btn.cancel:hover { color: var(--brown); border-color: var(--brown); }
 
     /* ── RECENT SESSIONS ── */
     .recent-section {
@@ -408,11 +424,27 @@
   </div>
 
   <!-- Live sessions -->
-  <div class="live-section" id="live-section" style="display:none">
+  <div class="status-section" id="section-live" style="display:none">
     <div class="recent-header">
-      <span class="recent-title" id="live-section-title">● Live now</span>
+      <span class="recent-title" style="color:#4caf50">● Live now</span>
     </div>
-    <div id="live-list"></div>
+    <div id="list-live"></div>
+  </div>
+
+  <!-- Today's scheduled sessions -->
+  <div class="status-section" id="section-today" style="display:none">
+    <div class="recent-header">
+      <span class="recent-title" style="color:var(--accent)">Today</span>
+    </div>
+    <div id="list-today"></div>
+  </div>
+
+  <!-- Upcoming scheduled sessions -->
+  <div class="status-section" id="section-upcoming" style="display:none">
+    <div class="recent-header">
+      <span class="recent-title">Upcoming</span>
+    </div>
+    <div id="list-upcoming"></div>
   </div>
 
   <!-- Recent sessions — last 5 -->
@@ -537,46 +569,69 @@
     renderRecentSessions(sessions);
   }
 
-  // Renders the Live Now / Scheduled section
+  // Renders live, today and upcoming sections
   function renderLiveSessions(liveSessions, scheduledSessions, userId) {
-    const section = document.getElementById('live-section');
-    const list    = document.getElementById('live-list');
-    if (!liveSessions.length && !scheduledSessions.length) { section.style.display = 'none'; return; }
-    section.style.display = 'block';
+    const today = new Date().toISOString().split('T')[0];
 
-    const liveHtml = liveSessions.map(s => `
-      <div class="live-card">
-        <div class="live-dot"></div>
-        <div class="live-info">
-          <p class="live-name">${escHtml(s.session_name || 'Untitled session')}</p>
-          <p class="live-meta">${(s.coffees||[]).length} coffee${(s.coffees||[]).length!==1?'s':''} · Live now</p>
-        </div>
-        <button class="live-end-btn" onclick="endLiveSession('${s.share_token}', '${s.id}', this)">End</button>
-      </div>`).join('');
+    const todaySessions    = scheduledSessions.filter(s => s.scheduled_at && s.scheduled_at.split('T')[0] === today);
+    const upcomingSessions = scheduledSessions.filter(s => !s.scheduled_at || s.scheduled_at.split('T')[0] !== today);
 
-    const scheduledHtml = scheduledSessions.map(s => {
-      const schedLabel = s.scheduled_at
-        ? new Date(s.scheduled_at).toLocaleDateString('en-IE', { weekday:'short', day:'numeric', month:'short' }) + ' ' +
-          new Date(s.scheduled_at).toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' })
-        : 'Not yet started';
-      const recurLabel = s.recurrence && s.recurrence !== 'none' ? ` · 🔁 ${s.recurrence}` : '';
-      return `
-      <div class="live-card" style="opacity:0.9">
-        <div class="live-dot" style="background:var(--accent);box-shadow:0 0 0 3px rgba(201,168,76,0.2);animation:none"></div>
-        <div class="live-info">
-          <p class="live-name">${escHtml(s.session_name || 'Untitled session')}</p>
-          <p class="live-meta">${schedLabel}${recurLabel}</p>
+    // Live
+    const sectionLive = document.getElementById('section-live');
+    const listLive    = document.getElementById('list-live');
+    if (liveSessions.length) {
+      sectionLive.style.display = 'block';
+      listLive.innerHTML = liveSessions.map(s => `
+        <div class="status-card live">
+          <div class="status-dot live"></div>
+          <div class="status-info">
+            <p class="status-name">${escHtml(s.session_name || 'Untitled session')}</p>
+            <p class="status-meta">${(s.coffees||[]).length} coffee${(s.coffees||[]).length!==1?'s':''} · Live now</p>
+          </div>
+          <div class="status-actions">
+            <button class="status-btn end" onclick="endLiveSession('${s.share_token}', '${s.id}', this)">End session</button>
+          </div>
+        </div>`).join('');
+    } else { sectionLive.style.display = 'none'; }
+
+    // Today
+    const sectionToday = document.getElementById('section-today');
+    const listToday    = document.getElementById('list-today');
+    if (todaySessions.length) {
+      sectionToday.style.display = 'block';
+      listToday.innerHTML = todaySessions.map(s => scheduledCard(s)).join('');
+    } else { sectionToday.style.display = 'none'; }
+
+    // Upcoming
+    const sectionUpcoming = document.getElementById('section-upcoming');
+    const listUpcoming    = document.getElementById('list-upcoming');
+    if (upcomingSessions.length) {
+      sectionUpcoming.style.display = 'block';
+      listUpcoming.innerHTML = upcomingSessions.map(s => scheduledCard(s)).join('');
+    } else { sectionUpcoming.style.display = 'none'; }
+  }
+
+  function scheduledCard(s) {
+    const schedLabel = s.scheduled_at
+      ? new Date(s.scheduled_at).toLocaleDateString('en-IE', { weekday:'short', day:'numeric', month:'short' }) + ' · ' +
+        new Date(s.scheduled_at).toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' })
+      : 'Date not set';
+    const recurLabel = s.recurrence && s.recurrence !== 'none'
+      ? ' · ' + s.recurrence.charAt(0).toUpperCase() + s.recurrence.slice(1)
+      : '';
+    const coffeeCount = (s.coffees||[]).length;
+    return `
+      <div class="status-card today">
+        <div class="status-dot today"></div>
+        <div class="status-info">
+          <p class="status-name">${escHtml(s.session_name || 'Untitled session')}</p>
+          <p class="status-meta">${schedLabel}${recurLabel} · ${coffeeCount} coffee${coffeeCount!==1?'s':''}</p>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="live-end-btn" style="color:#2d4a26;border-color:rgba(45,74,38,0.3);background:rgba(45,74,38,0.08)"
-            onclick="startScheduledSession('${s.share_token}', '${s.id}', this)">Start</button>
-          <button class="live-end-btn" style="color:var(--mid);border-color:var(--divider)"
-            onclick="cancelScheduledSession('${s.share_token}', '${s.id}', this)">Cancel</button>
+        <div class="status-actions">
+          <button class="status-btn start" onclick="startScheduledSession('${s.share_token}', '${s.id}', this)">Start</button>
+          <button class="status-btn cancel" onclick="cancelScheduledSession('${s.share_token}', '${s.id}', this)">Cancel</button>
         </div>
       </div>`;
-    }).join('');
-
-    list.innerHTML = liveHtml + scheduledHtml;
   }
 
   // Starts a scheduled session from the dashboard — sets status to active
@@ -624,9 +679,9 @@
       return;
     }
 
-    btn.closest('.live-card').remove();
-    const remaining = document.querySelectorAll('#live-list .live-card');
-    if (!remaining.length) document.getElementById('live-section').style.display = 'none';
+    btn.closest('.status-card').remove();
+    const remaining = document.querySelectorAll('#list-live .status-card');
+    if (!remaining.length) document.getElementById('section-live').style.display = 'none';
   }
 
   // Ends a live session from the dashboard
@@ -650,9 +705,9 @@
     }
 
     // Remove the card from the live list
-    btn.closest('.live-card').remove();
-    const remaining = document.querySelectorAll('#live-list .live-card');
-    if (!remaining.length) document.getElementById('live-section').style.display = 'none';
+    btn.closest('.status-card').remove();
+    const remaining = document.querySelectorAll('#list-live .status-card');
+    if (!remaining.length) document.getElementById('section-live').style.display = 'none';
   }
 
   // Simple HTML escape helper
