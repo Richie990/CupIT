@@ -273,7 +273,14 @@
     setLoading(true);
 
     try {
+      // Verify Turnstile before proceeding
       const token = turnstile.getResponse();
+      if (!token) {
+        globalError.textContent = 'Please complete the captcha.';
+        setLoading(false);
+        return;
+      }
+
       const { error } = await window.supabaseClient.auth.resetPasswordForEmail(
         email.value.trim(),
         { redirectTo: 'https://richie990.github.io/CupIT/newpassword.html' }
@@ -281,6 +288,7 @@
 
       if (error) {
         globalError.textContent = error.message;
+        turnstile.reset();
         setLoading(false);
         return;
       }
@@ -294,6 +302,7 @@
 
     } catch(e) {
       globalError.textContent = 'Something went wrong. Please try again.';
+      turnstile.reset();
       console.error(e);
       setLoading(false);
     }
