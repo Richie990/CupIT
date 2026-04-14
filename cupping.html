@@ -332,6 +332,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="CupIT" />
   <link rel="apple-touch-icon" href="icon.svg" />
+  <meta name="robots" content="noindex, nofollow" />
 </head>
 <body>
 
@@ -378,6 +379,17 @@
     </div>
 
     <div class="section-card">
+      <p class="section-card-title">Your role</p>
+      <div class="param-toggle" id="host-only-toggle" onclick="toggleHostOnly(this)" style="width:100%">
+        <span class="param-check" id="host-only-check"></span>
+        <div>
+          <span class="param-label">Host only — I'm not cupping</span>
+          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">Enable this if you are running the session but not cupping yourself.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
       <p class="section-card-title">Timer</p>
       <div class="param-toggle" id="timer-toggle" onclick="toggleTimer(this)" style="width:100%">
         <span class="param-check" id="timer-check"></span>
@@ -414,20 +426,40 @@
     </div>
 
     <div class="section-card" style="margin-top:12px">
-      <p style="font-size:0.82rem;color:var(--mid);line-height:1.7">
-        Guests can fill in their scores and notes at any time while the link is active.
-        The link stays open until you end the session from your history page.
+      <p style="font-size:0.82rem;color:var(--mid);line-height:1.7" id="share-info-text">
+        Guests can join as soon as you start the session. Share the link or QR code in advance so they're ready.
       </p>
     </div>
   </div>
   <div class="action-bar">
     <div class="action-bar-inner">
       <button class="btn-back-action" onclick="goTo('setup')">←</button>
-      <button class="btn-primary-action" onclick="startCupping()">Start cupping →</button>
+      <button class="btn-primary-action" id="btn-start-session" onclick="startSession()">Start session →</button>
     </div>
   </div>
 </div>
 
+
+<!-- ══ HOST MANAGE ══ -->
+<div class="view" id="view-host-manage">
+  <div class="view-inner">
+    <p class="view-title" style="margin-bottom:6px">Session <em>live</em></p>
+    <p class="view-sub">Your session is active. Guests can join using the link you shared. End the session when everyone is done.</p>
+    <div class="section-card" style="margin-top:20px;text-align:center">
+      <p style="font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);margin-bottom:8px">Guest responses</p>
+      <p id="host-guest-count" style="font-family:'Playfair Display',serif;font-size:2rem;color:var(--brown);font-style:italic">0</p>
+      <p style="font-size:0.82rem;color:var(--mid);margin-top:4px">guests have submitted their notes</p>
+    </div>
+    <div class="section-card" style="margin-top:12px">
+      <p style="font-size:0.82rem;color:var(--mid);line-height:1.7">When you're ready to close the session tap End session below. Guests will no longer be able to submit after this.</p>
+    </div>
+  </div>
+  <div class="action-bar">
+    <div class="action-bar-inner">
+      <button class="btn-primary-action" id="btn-host-end" onclick="endSessionFromHost()" style="background:#c0392b;color:#fff">End session</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══ CUPPING ══ -->
 <div class="view" id="view-cupping">
@@ -565,6 +597,7 @@
 
   let currentView = 'setup'; // tracks which view is showing
   let shareToken   = null;    // generated when setup completes, used for guest QR code
+  let hostOnly     = false;   // true if host is not cupping themselves
 
   let useTimer = false; // whether the user enabled the steep timer in setup
 
@@ -1012,8 +1045,8 @@
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + view).classList.add('active');
     currentView = view;
-    // Phase bar: setup=1, share=1, cupping=2, review/saved=3
-    const map = { setup:1, share:1, cupping:2, review:3, saved:3 };
+    // Phase bar: setup=1, share=1, host-manage=2, cupping=2, review/saved=3
+    const map = { setup:1, share:1, 'host-manage':2, cupping:2, review:3, saved:3 };
     const active = map[view]||1;
     [1,2,3].forEach(n => {
       document.getElementById('phase-'+n).classList.toggle('active', n===active);
@@ -1049,6 +1082,7 @@
           params_active: [...activeParams],
           timer_enabled: useTimer,
           is_active:     false,
+          status:        'ended',
         })
         .eq('share_token', shareToken)
         .eq('user_id', session.user.id));
@@ -1065,6 +1099,7 @@
           timer_enabled: useTimer,
           share_token:   null,
           is_active:     false,
+          status:        'ended',
         }));
     }
 
@@ -1107,6 +1142,7 @@
           params_active: [...activeParams],
           timer_enabled: useTimer,
           share_token:   shareToken,
+          status:        'scheduled',
         });
 
       if (error) {
@@ -1137,6 +1173,68 @@
     goTo('share');
   }
 
+  // Starts the session — sets status to 'active' so guests can join,
+  // then routes host to cupping or host-only management view
+  async function startSession() {
+    const btn = document.getElementById('btn-start-session');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) { window.location.href = 'signup.html'; return; }
+
+    // Update status to active
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .update({ status: 'active' })
+      .eq('share_token', shareToken)
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Error starting session:', error.message);
+      btn.disabled = false;
+      btn.textContent = 'Start session →';
+      return;
+    }
+
+    if (hostOnly) {
+      goTo('host-manage');
+    } else {
+      startCupping();
+    }
+  }
+
+  // Ends the session from the host-manage view
+  async function endSessionFromHost() {
+    const btn = document.getElementById('btn-host-end');
+    btn.disabled = true;
+    btn.textContent = 'Ending...';
+
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) { window.location.href = 'signup.html'; return; }
+
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .update({
+        status:       'ended',
+        session_name: document.getElementById('session-name').value.trim() || 'Untitled session',
+        is_active:    false,
+      })
+      .eq('share_token', shareToken)
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Error ending session:', error.message);
+      btn.disabled = false;
+      btn.textContent = 'End session';
+      return;
+    }
+
+    document.getElementById('saved-sub').textContent =
+      `Session ended. Guest responses have been saved to your journal.`;
+    goTo('saved');
+  }
+
   // Copies the share link to clipboard
   function copyLink() {
     const link = document.getElementById('share-link').value;
@@ -1146,10 +1244,20 @@
       setTimeout(() => btn.textContent = 'Copy', 2000);
     });
   }
+  // Toggles host-only mode
+  function toggleHostOnly(el) {
+    hostOnly = !hostOnly;
+    el.classList.toggle('on', hostOnly);
+    document.getElementById('host-only-check').textContent = hostOnly ? '✓' : '';
+  }
+
   // Called from "Start a new session" on the saved screen.
   function resetAll() {
     coffees = [];
     shareToken = null;
+    hostOnly   = false;
+    document.getElementById('host-only-toggle').classList.remove('on');
+    document.getElementById('host-only-check').textContent = '';
     activeParams = new Set(['origin','variety','process','roaster','producer','flavours','notes']);
     useTimer = false;
     clearInterval(timerInterval);

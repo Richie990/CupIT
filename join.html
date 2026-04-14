@@ -399,14 +399,21 @@
       // Fetch session using share token — check is_active too
       const { data, error } = await window.supabaseClient
         .from('cupping_sessions')
-        .select('session_name, coffees, params_active, is_active')
+        .select('session_name, coffees, params_active, is_active, status')
         .eq('share_token', token)
         .single();
 
       if (error || !data) { showError(); return; }
 
-      // Check if session is still open
-      if (!data.is_active) {
+      // Check session status
+      if (data.status === 'scheduled') {
+        document.getElementById('state-loading').style.display = 'none';
+        document.getElementById('state-closed').style.display = 'block';
+        document.getElementById('header-title').innerHTML = 'Session <em>not started</em>';
+        document.getElementById('header-sub').textContent = "The host hasn't started this session yet — check back soon";
+        return;
+      }
+      if (data.status === 'ended' || data.status === 'cancelled' || !data.is_active) {
         document.getElementById('state-loading').style.display = 'none';
         document.getElementById('state-closed').style.display = 'block';
         document.getElementById('header-title').innerHTML = 'Session <em>ended</em>';
@@ -677,11 +684,11 @@
       // Final server-side check — make sure session is still active
       const { data: check } = await window.supabaseClient
         .from('cupping_sessions')
-        .select('is_active')
+        .select('is_active, status')
         .eq('share_token', sessionData.token)
         .single();
 
-      if (!check || !check.is_active) {
+      if (!check || check.status !== 'active') {
         document.getElementById('step-cupping').style.display = 'none';
         document.getElementById('state-closed').style.display = 'block';
         return;

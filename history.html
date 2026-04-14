@@ -500,6 +500,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="CupIT" />
   <link rel="apple-touch-icon" href="icon.svg" />
+  <meta name="robots" content="noindex, nofollow" />
 </head>
 <body>
 
@@ -651,7 +652,7 @@
   async function loadSessions(userId) {
     const { data, error } = await window.supabaseClient
       .from('cupping_sessions')
-      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active')
+      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status')
       .eq('user_id', userId)
       .order('id', { ascending: false });
 
@@ -669,6 +670,7 @@
       coffees:     s.coffees || [],
       shareToken:  s.share_token || null,
       isActive:    s.is_active,
+      status:      s.status || (s.is_active ? 'active' : 'ended'),
     }));
 
     // Update session count in header
@@ -835,11 +837,11 @@
     // Populate drawer header
     document.getElementById('drawer-title').textContent = session.name;
     document.getElementById('drawer-meta').textContent  =
-      `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''}${session.isActive ? ' · 🟢 Active' : ''}`;
+      `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''} · ${statusBadge(session.status)}`;
 
     // Show End session button only for active sessions with a share token
     const endBtn = document.getElementById('btn-end-session');
-    endBtn.style.display = (session.isActive && session.shareToken) ? 'inline-flex' : 'none';
+    endBtn.style.display = (session.status === 'active' && session.shareToken) ? 'inline-flex' : 'none';
 
     // Build drawer body — host's coffees first
     let html = `<span style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:14px">Your notes</span>`;
@@ -964,7 +966,18 @@
     }, 350);
   }
 
-  // Closes the session — sets is_active = false so guests can no longer submit
+  // Returns a readable status badge string
+  function statusBadge(status) {
+    switch(status) {
+      case 'scheduled': return '🕐 Scheduled';
+      case 'active':    return '🟢 Live';
+      case 'ended':     return 'Ended';
+      case 'cancelled': return 'Cancelled';
+      default:          return '';
+    }
+  }
+
+  // Closes the session — sets status = ended so guests can no longer submit
   async function endSession() {
     const session = sessions.find(s => s.id === activeDrawerId);
     if (!session || !session.shareToken) return;
@@ -973,7 +986,7 @@
 
     const { error } = await window.supabaseClient
       .from('cupping_sessions')
-      .update({ is_active: false })
+      .update({ is_active: false, status: 'ended' })
       .eq('id', activeDrawerId);
 
     if (error) {
@@ -984,6 +997,7 @@
 
     // Update local state
     session.isActive = false;
+    session.status   = 'ended';
 
     // Update drawer meta and hide End session button
     document.getElementById('drawer-meta').textContent =

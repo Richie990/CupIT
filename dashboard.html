@@ -202,6 +202,48 @@
     .action-card.primary .action-card-arrow { color: rgba(26,35,25,0.4); }
     .action-card.primary:hover .action-card-arrow { color: #1a2319; }
 
+    /* ── LIVE NOW ── */
+    .live-section {
+      margin-bottom: 28px;
+      animation: fadeUp 0.4s ease both; animation-delay: 0.15s;
+    }
+    .live-card {
+      background: var(--dark); border-radius: var(--r);
+      padding: 16px 18px; display: flex; align-items: center;
+      gap: 14px; text-decoration: none; transition: opacity 0.2s;
+      margin-bottom: 8px;
+    }
+    .live-card:hover { opacity: 0.9; }
+    .live-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #4caf50; flex-shrink: 0;
+      box-shadow: 0 0 0 3px rgba(76,175,80,0.25);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 3px rgba(76,175,80,0.25); }
+      50%       { box-shadow: 0 0 0 6px rgba(76,175,80,0.1); }
+    }
+    .live-info { flex: 1; min-width: 0; }
+    .live-name {
+      font-weight: 500; color: var(--cream); font-size: 0.88rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .live-meta {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); margin-top: 3px;
+    }
+    .live-end-btn {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: #c0392b; background: rgba(192,57,43,0.12);
+      border: 1px solid rgba(192,57,43,0.25); border-radius: 20px;
+      padding: 6px 12px; cursor: pointer; transition: all 0.2s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .live-end-btn:hover { background: rgba(192,57,43,0.2); }
+
     /* ── RECENT SESSIONS ── */
     .recent-section {
       animation: fadeUp 0.5s ease both; animation-delay: 0.2s;
@@ -322,6 +364,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="CupIT" />
   <link rel="apple-touch-icon" href="icon.svg" />
+  <meta name="robots" content="noindex, nofollow" />
 </head>
 <body>
 
@@ -362,6 +405,14 @@
       <span class="action-card-desc">Browse, search and filter all your past sessions.</span>
       <span class="action-card-arrow">View all →</span>
     </a>
+  </div>
+
+  <!-- Live sessions -->
+  <div class="live-section" id="live-section" style="display:none">
+    <div class="recent-header">
+      <span class="recent-title" style="color:#4caf50">● Live now</span>
+    </div>
+    <div id="live-list"></div>
   </div>
 
   <!-- Recent sessions — last 5 -->
@@ -451,22 +502,31 @@
     document.getElementById('user-name').textContent = data.name || 'there';
   }
 
-  // Loads the 5 most recent sessions from cupping_sessions
+  // Loads the 5 most recent sessions and any live sessions from cupping_sessions
   async function loadRecentSessions(userId) {
     const { data, error } = await window.supabaseClient
       .from('cupping_sessions')
-      .select('id, session_name, session_date, coffees')
+      .select('id, session_name, session_date, coffees, status, share_token, is_active')
       .eq('user_id', userId)
       .order('id', { ascending: false })
-      .limit(5);
+      .limit(20);
 
     if (error) {
       console.error('Error loading sessions:', error.message);
       return;
     }
 
-    // Map snake_case DB columns back to the shape renderRecentSessions expects
-    const sessions = (data || []).map(s => ({
+    const all = data || [];
+
+    // Separate live sessions
+    const live    = all.filter(s => s.status === 'active' || s.is_active === true);
+    const recent  = all.filter(s => s.status !== 'active' && !s.is_active).slice(0, 5);
+
+    // Render live sessions
+    renderLiveSessions(live, userId);
+
+    // Map and render recent sessions
+    const sessions = recent.map(s => ({
       id:      s.id,
       name:    s.session_name,
       date:    s.session_date,
@@ -474,6 +534,55 @@
     }));
 
     renderRecentSessions(sessions);
+  }
+
+  // Renders the Live Now section
+  function renderLiveSessions(sessions, userId) {
+    const section = document.getElementById('live-section');
+    const list    = document.getElementById('live-list');
+    if (!sessions.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    list.innerHTML = sessions.map(s => `
+      <div class="live-card">
+        <div class="live-dot"></div>
+        <div class="live-info">
+          <p class="live-name">${escHtml(s.session_name || 'In progress...')}</p>
+          <p class="live-meta">${(s.coffees||[]).length} coffee${(s.coffees||[]).length!==1?'s':''}</p>
+        </div>
+        <button class="live-end-btn" onclick="endLiveSession('${s.share_token}', '${s.id}', this)">End</button>
+      </div>
+    `).join('');
+  }
+
+  // Ends a live session from the dashboard
+  async function endLiveSession(shareToken, sessionId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Ending...';
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) return;
+
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .update({ status: 'ended', is_active: false })
+      .eq('id', sessionId)
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('End session error:', error.message);
+      btn.disabled = false;
+      btn.textContent = 'End';
+      return;
+    }
+
+    // Remove the card from the live list
+    btn.closest('.live-card').remove();
+    const remaining = document.querySelectorAll('#live-list .live-card');
+    if (!remaining.length) document.getElementById('live-section').style.display = 'none';
+  }
+
+  // Simple HTML escape helper
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   // Renders recent session rows — accepts sessions array
