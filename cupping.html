@@ -621,6 +621,7 @@
   let shareToken   = null;    // generated when setup completes, used for guest QR code
   let hostOnly     = false;   // true if host is not cupping themselves
   let blindCupping = false;   // true if guests should not see coffee names/metadata
+  let realtimeSub  = null;    // supabase realtime subscription for guest count
 
   let useTimer = false; // whether the user enabled the steep timer in setup
 
@@ -643,10 +644,39 @@
         return;
       }
       track('page_view', { page: 'cupping' });
-  // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
-  window.supabaseClient.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') window.location.href = 'index.html';
-  });
+      window.supabaseClient.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_OUT') window.location.href = 'index.html';
+      });
+
+      // Check sessionStorage for a live host-manage session (handles F5 refresh)
+      const saved = sessionStorage.getItem('cupit_host_manage');
+      if (saved) {
+        try {
+          const state = JSON.parse(saved);
+          // Verify session is still active in DB before restoring
+          const { data } = await window.supabaseClient
+            .from('cupping_sessions')
+            .select('status, session_name, coffees')
+            .eq('share_token', state.shareToken)
+            .eq('user_id', session.user.id)
+            .single();
+
+          if (data && data.status === 'active') {
+            shareToken = state.shareToken;
+            // Restore minimal state needed for end session
+            document.getElementById('session-name').value = data.session_name || '';
+            buildParamGrid();
+            addCoffee(); addCoffee(); // keep coffees list valid
+            goTo('host-manage');
+            startGuestCountSubscription();
+            return;
+          } else {
+            sessionStorage.removeItem('cupit_host_manage');
+          }
+        } catch(e) {
+          sessionStorage.removeItem('cupit_host_manage');
+        }
+      }
 
     } catch(e) {
       console.warn('Auth check failed, continuing anyway:', e.message);
@@ -1188,6 +1218,12 @@
       return;
     }
 
+    const sessionName = document.getElementById('session-name').value.trim();
+    if (!sessionName) {
+      document.getElementById('session-name').focus();
+      return;
+    }
+
     // Get current authenticated user
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session) { window.location.href = 'signup.html'; return; }
@@ -1197,11 +1233,12 @@
       shareToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 
       // Insert a placeholder row so guests can find the session immediately
+      const sessionName = document.getElementById('session-name').value.trim() || 'Untitled session';
       const { error } = await window.supabaseClient
         .from('cupping_sessions')
         .insert({
           user_id:       session.user.id,
-          session_name:  'In progress...',
+          session_name:  sessionName,
           session_date:  new Date().toISOString().split('T')[0],
           coffees:       coffees.filter(c => c.name.trim()).map(c => ({
             name: c.name,
@@ -1268,9 +1305,54 @@
     }
 
     if (hostOnly) {
+      // Persist to sessionStorage so F5 restores host-manage view
+      sessionStorage.setItem('cupit_host_manage', JSON.stringify({ shareToken }));
       goTo('host-manage');
+      startGuestCountSubscription();
     } else {
       startCupping();
+    }
+  }
+
+  // Subscribes to session_responses in realtime and updates the guest count
+  async function startGuestCountSubscription() {
+    // Get initial count first
+    const { count } = await window.supabaseClient
+      .from('session_responses')
+      .select('id', { count: 'exact', head: true })
+      .eq('share_token', shareToken);
+
+    updateGuestCount(count || 0);
+
+    // Subscribe to new inserts
+    realtimeSub = window.supabaseClient
+      .channel(`responses:${shareToken}`)
+      .on('postgres_changes', {
+        event:  'INSERT',
+        schema: 'public',
+        table:  'session_responses',
+        filter: `share_token=eq.${shareToken}`,
+      }, () => {
+        // Re-fetch count on each new response
+        window.supabaseClient
+          .from('session_responses')
+          .select('id', { count: 'exact', head: true })
+          .eq('share_token', shareToken)
+          .then(({ count }) => updateGuestCount(count || 0));
+      })
+      .subscribe();
+  }
+
+  function updateGuestCount(n) {
+    const el = document.getElementById('host-guest-count');
+    if (el) el.textContent = n;
+  }
+
+  // Unsubscribes realtime channel if active
+  function stopGuestCountSubscription() {
+    if (realtimeSub) {
+      window.supabaseClient.removeChannel(realtimeSub);
+      realtimeSub = null;
     }
   }
 
@@ -1299,6 +1381,10 @@
       btn.textContent = 'End session';
       return;
     }
+
+    // Clean up realtime subscription and sessionStorage
+    stopGuestCountSubscription();
+    sessionStorage.removeItem('cupit_host_manage');
 
     document.getElementById('saved-sub').textContent =
       `Session ended. Guest responses have been saved to your journal.`;
@@ -1334,6 +1420,8 @@
     shareToken    = null;
     hostOnly      = false;
     blindCupping  = false;
+    stopGuestCountSubscription();
+    sessionStorage.removeItem('cupit_host_manage');
     document.getElementById('host-only-toggle').classList.remove('on');
     document.getElementById('host-only-check').textContent = '';
     document.getElementById('blind-toggle').classList.remove('on');
