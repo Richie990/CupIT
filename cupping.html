@@ -379,57 +379,14 @@
 <div class="view active" id="view-setup">
   <div class="view-inner">
     <p class="view-title">Set up your session</p>
-    <p class="view-sub">Name it, add your coffees, and choose what you want to capture this time.</p>
+    <p class="view-sub">Start by choosing when this session is happening, then fill in the details.</p>
 
+    <!-- ── WHEN ── -->
     <div class="section-card">
-      <p class="section-card-title">Session name</p>
-      <div class="form-group" style="margin-bottom:0">
-        <input type="text" id="session-name" class="form-input" placeholder="e.g. Saturday morning — Kenyan naturals" />
-      </div>
-    </div>
-
-    <div class="section-card">
-      <p class="section-card-title">Coffees</p>
-      <div class="coffee-list" id="coffee-list"></div>
-      <button class="btn-add-coffee" onclick="addCoffee()">+ Add a coffee</button>
-    </div>
-
-    <div class="section-card">
-      <p class="section-card-title">What do you want to capture?</p>
-      <p style="font-size:0.82rem;color:var(--mid);margin-bottom:14px;line-height:1.5">Toggle the fields that matter for this session.</p>
-      <div class="param-grid" id="param-grid"></div>
-    </div>
-
-    <div class="section-card">
-      <p class="section-card-title">Your role</p>
-      <div class="param-toggle" id="host-only-toggle" onclick="toggleHostOnly(this)" style="width:100%">
-        <span class="param-check" id="host-only-check"></span>
-        <div>
-          <span class="param-label">Host only — I'm not cupping</span>
-          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">Enable this if you are running the session but not cupping yourself.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-card">
-      <p class="section-card-title">Blind cupping</p>
-      <div class="param-toggle" id="blind-toggle" onclick="toggleBlind(this)" style="width:100%">
-        <span class="param-check" id="blind-check"></span>
-        <div>
-          <span class="param-label">Blind mode — hide coffee names from guests</span>
-          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">Guests see Coffee 1, Coffee 2 etc. The reveal happens when you end the session.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-card">
-      <p class="section-card-title">Schedule</p>
-      <div class="param-toggle" id="schedule-toggle" onclick="toggleSchedule(this)" style="width:100%;margin-bottom:0" >
-        <span class="param-check" id="schedule-check"></span>
-        <div>
-          <span class="param-label">Schedule for later</span>
-          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">Set a date and time — guests will see when the session starts.</p>
-        </div>
+      <p class="section-card-title">When is this session?</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="recurrence-btn active" id="when-now" onclick="setWhen('now',this)">Now</button>
+        <button class="recurrence-btn" id="when-later" onclick="setWhen('later',this)">Later</button>
       </div>
       <div id="schedule-fields" style="display:none;margin-top:16px">
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
@@ -452,13 +409,60 @@
       </div>
     </div>
 
+    <!-- ── NAME ── -->
+    <div class="section-card">
+      <p class="section-card-title">Session name</p>
+      <div class="form-group" style="margin-bottom:0">
+        <input type="text" id="session-name" class="form-input" placeholder="e.g. Saturday morning — Kenyan naturals" />
+      </div>
+    </div>
+
+    <!-- ── COFFEES ── -->
+    <div class="section-card">
+      <p class="section-card-title">Coffees</p>
+      <div class="coffee-list" id="coffee-list"></div>
+      <button class="btn-add-coffee" onclick="addCoffee()">+ Add a coffee</button>
+    </div>
+
+    <!-- ── PARAMS ── -->
+    <div class="section-card">
+      <p class="section-card-title">What do you want to capture?</p>
+      <p style="font-size:0.82rem;color:var(--mid);margin-bottom:14px;line-height:1.5">Toggle the fields that matter for this session.</p>
+      <div class="param-grid" id="param-grid"></div>
+    </div>
+
+    <!-- ── YOUR ROLE ── -->
+    <div class="section-card">
+      <p class="section-card-title">Your role</p>
+      <div class="param-toggle" id="host-only-toggle" onclick="toggleHostOnly(this)" style="width:100%">
+        <span class="param-check" id="host-only-check"></span>
+        <div>
+          <span class="param-label">Host only — I'm not cupping</span>
+          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">Enable this if you are running the session but not cupping yourself.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BLIND ── -->
+    <div class="section-card">
+      <p class="section-card-title">Blind cupping</p>
+      <div class="param-toggle" id="blind-toggle" onclick="toggleBlind(this)" style="width:100%">
+        <span class="param-check" id="blind-check"></span>
+        <div>
+          <span class="param-label">Blind mode — hide coffee names from guests</span>
+          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">Guests see Coffee 1, Coffee 2 etc. The reveal happens when you end the session.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TIMER (host only) ── -->
     <div class="section-card">
       <p class="section-card-title">Timer</p>
       <div class="param-toggle" id="timer-toggle" onclick="toggleTimer(this)" style="width:100%">
         <span class="param-check" id="timer-check"></span>
         <div>
           <span class="param-label">Include a steep timer</span>
-          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">A collapsible 4-minute timer will appear during the session — show or hide it as needed.</p>
+          <p style="font-size:0.75rem;color:var(--mid);margin-top:3px;line-height:1.4">A collapsible 4-minute timer for the host — not shown to guests.</p>
         </div>
       </div>
     </div>
@@ -1320,7 +1324,7 @@
     const joinUrl = `https://richie990.github.io/CupIT/join.html?token=${shareToken}`;
 
     // Show correct action button based on whether session is scheduled
-    const isScheduled = !!(scheduledAt);
+    const isScheduled = document.getElementById('when-later').classList.contains('active');
     document.getElementById('btn-start-session').style.display  = isScheduled ? 'none' : 'inline-flex';
     document.getElementById('btn-save-scheduled').style.display = isScheduled ? 'inline-flex' : 'none';
 
@@ -1467,20 +1471,22 @@
       setTimeout(() => btn.textContent = 'Copy', 2000);
     });
   }
-  // Toggles the schedule fields
-  function toggleSchedule(el) {
+  // Handles the Now / Later toggle
+  function setWhen(val, btn) {
+    document.querySelectorAll('#when-now, #when-later').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
     const fields = document.getElementById('schedule-fields');
-    const open   = fields.style.display === 'none';
-    fields.style.display = open ? 'block' : 'none';
-    el.classList.toggle('on', open);
-    document.getElementById('schedule-check').textContent = open ? '✓' : '';
-    if (!open) { scheduledAt = null; }
-
-    // Default date/time to now if opening for first time
-    if (open && !document.getElementById('schedule-date').value) {
-      const d = new Date();
-      document.getElementById('schedule-date').value = d.toISOString().split('T')[0];
-      document.getElementById('schedule-time').value = d.toTimeString().slice(0,5);
+    if (val === 'later') {
+      fields.style.display = 'block';
+      // Default to current date/time if not set
+      if (!document.getElementById('schedule-date').value) {
+        const d = new Date();
+        document.getElementById('schedule-date').value = d.toISOString().split('T')[0];
+        document.getElementById('schedule-time').value = d.toTimeString().slice(0,5);
+      }
+    } else {
+      fields.style.display = 'none';
+      scheduledAt = null;
     }
   }
 
@@ -1518,9 +1524,9 @@
     document.getElementById('blind-check').textContent = '';
     scheduledAt = null;
     recurrence  = 'none';
-    document.getElementById('schedule-toggle').classList.remove('on');
-    document.getElementById('schedule-check').textContent = '';
     document.getElementById('schedule-fields').style.display = 'none';
+    document.getElementById('when-now').classList.add('active');
+    document.getElementById('when-later').classList.remove('active');
     document.getElementById('schedule-date').value = '';
     document.getElementById('schedule-time').value = '';
     document.querySelectorAll('.recurrence-btn').forEach(b => b.classList.remove('active'));
