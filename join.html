@@ -485,7 +485,10 @@
   function buildPanel(idx, params) {
     let html = `<div class="section-card">`;
 
-    // Text fields
+    // Host-only fields — set by the host during setup, not shown to guests
+    const HOST_ONLY = new Set(['origin','variety','producer','roaster','harvest','process','roast']);
+
+    // Text fields — guests do not see host-only metadata
     const textFields = [
       { id:'origin',   label:'Origin',       placeholder:'e.g. Ethiopia, Yirgacheffe' },
       { id:'variety',  label:'Variety',      placeholder:'e.g. Bourbon, Gesha, Typica' },
@@ -494,7 +497,7 @@
       { id:'harvest',  label:'Harvest Year', placeholder:'e.g. 2024' },
     ];
     textFields.forEach(f => {
-      if (params.has(f.id)) {
+      if (params.has(f.id) && !HOST_ONLY.has(f.id)) {
         html += `<div class="form-group">
           <label class="form-label">${f.label}</label>
           <input type="text" class="form-input" id="${f.id}-${idx}" placeholder="${f.placeholder}" />
@@ -502,27 +505,8 @@
       }
     });
 
-    // Process select
-    if (params.has('process')) {
-      html += `<div class="form-group">
-        <label class="form-label">Process</label>
-        <select class="form-input" id="process-${idx}">
-          <option value="">Select...</option>
-          ${['Washed','Natural','Honey','Anaerobic','Other'].map(o=>`<option>${o}</option>`).join('')}
-        </select>
-      </div>`;
-    }
-
-    // Roast level select
-    if (params.has('roast')) {
-      html += `<div class="form-group">
-        <label class="form-label">Roast Level</label>
-        <select class="form-input" id="roast-${idx}">
-          <option value="">Select...</option>
-          ${['Light','Medium-Light','Medium','Medium-Dark','Dark'].map(o=>`<option>${o}</option>`).join('')}
-        </select>
-      </div>`;
-    }
+    // Process select — host only
+    // Roast level select — host only
 
     // Textarea fields
     const textareaFields = [
@@ -645,23 +629,10 @@
       const params = new Set(sessionData.params_active || []);
       const data   = {};
 
-      // Text fields
-      ['origin','variety','producer','roaster','harvest'].forEach(k => {
-        if (params.has(k)) {
-          const el = document.getElementById(`${k}-${i}`);
-          if (el && el.value.trim()) data[k] = el.value.trim();
-        }
-      });
+      // Host-only fields — not collected from guests
+      const HOST_ONLY = new Set(['origin','variety','producer','roaster','harvest','process','roast']);
 
-      // Select fields
-      ['process','roast'].forEach(k => {
-        if (params.has(k)) {
-          const el = document.getElementById(`${k}-${i}`);
-          if (el && el.value) data[k] = el.value;
-        }
-      });
-
-      // Textarea fields
+      // Textarea fields — sensory/tasting fields only
       ['dry_aroma','wet_aroma','body','aftertaste','notes'].forEach(k => {
         if (params.has(k)) {
           const el = document.getElementById(`${k}-${i}`);
