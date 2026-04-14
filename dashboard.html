@@ -561,18 +561,47 @@
         : 'Not yet started';
       const recurLabel = s.recurrence && s.recurrence !== 'none' ? ` · 🔁 ${s.recurrence}` : '';
       return `
-      <div class="live-card" style="opacity:0.8">
-        <div class="live-dot" style="background:var(--accent);box-shadow:0 0 0 3px rgba(201,168,76,0.2)"></div>
+      <div class="live-card" style="opacity:0.9">
+        <div class="live-dot" style="background:var(--accent);box-shadow:0 0 0 3px rgba(201,168,76,0.2);animation:none"></div>
         <div class="live-info">
           <p class="live-name">${escHtml(s.session_name || 'Untitled session')}</p>
           <p class="live-meta">${schedLabel}${recurLabel}</p>
         </div>
-        <button class="live-end-btn" style="color:var(--mid);border-color:var(--divider)"
-          onclick="cancelScheduledSession('${s.share_token}', '${s.id}', this)">Cancel</button>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="live-end-btn" style="color:#2d4a26;border-color:rgba(45,74,38,0.3);background:rgba(45,74,38,0.08)"
+            onclick="startScheduledSession('${s.share_token}', '${s.id}', this)">Start</button>
+          <button class="live-end-btn" style="color:var(--mid);border-color:var(--divider)"
+            onclick="cancelScheduledSession('${s.share_token}', '${s.id}', this)">Cancel</button>
+        </div>
       </div>`;
     }).join('');
 
     list.innerHTML = liveHtml + scheduledHtml;
+  }
+
+  // Starts a scheduled session from the dashboard — sets status to active
+  async function startScheduledSession(shareToken, sessionId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) return;
+
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .update({ status: 'active', is_active: true })
+      .eq('id', sessionId)
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Start error:', error.message);
+      btn.disabled = false;
+      btn.textContent = 'Start';
+      return;
+    }
+
+    // Redirect to host-manage view on cupping page with the share token
+    sessionStorage.setItem('cupit_host_manage', JSON.stringify({ shareToken }));
+    window.location.href = 'cupping.html';
   }
 
   // Cancels a scheduled session from the dashboard

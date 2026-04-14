@@ -204,9 +204,10 @@
       font-family: 'DM Mono', monospace; font-size: 0.56rem;
       letter-spacing: 0.06em; text-transform: uppercase;
       cursor: pointer; transition: all 0.15s;
+      white-space: nowrap;
     }
     .recurrence-btn:hover { border-color: var(--brown); color: var(--brown); }
-    .recurrence-btn.active { background: var(--dark); color: var(--cream); border-color: var(--dark); }
+    .recurrence-btn.active { background: var(--brown); color: var(--cream); border-color: var(--brown); }
     .coffee-meta-fields { padding: 0 16px 14px; display: none; border-top: 1px solid var(--divider); padding-top: 12px; margin-top: 0; }
     .coffee-meta-fields.open { display: block; }
     .coffee-meta-fields .form-group { margin-bottom: 10px; }
@@ -497,6 +498,7 @@
     <div class="action-bar-inner">
       <button class="btn-back-action" onclick="goTo('setup')">←</button>
       <button class="btn-primary-action" id="btn-start-session" onclick="startSession()">Start session →</button>
+      <button class="btn-primary-action" id="btn-save-scheduled" onclick="saveScheduled()" style="display:none">Save &amp; schedule →</button>
     </div>
   </div>
 </div>
@@ -1317,6 +1319,11 @@
 
     const joinUrl = `https://richie990.github.io/CupIT/join.html?token=${shareToken}`;
 
+    // Show correct action button based on whether session is scheduled
+    const isScheduled = !!(scheduledAt);
+    document.getElementById('btn-start-session').style.display  = isScheduled ? 'none' : 'inline-flex';
+    document.getElementById('btn-save-scheduled').style.display = isScheduled ? 'inline-flex' : 'none';
+
     // Populate the share link input
     document.getElementById('share-link').value = joinUrl;
 
@@ -1333,6 +1340,11 @@
     });
 
     goTo('share');
+  }
+
+  // For scheduled sessions — session is already saved as 'scheduled', just go to dashboard
+  async function saveScheduled() {
+    window.location.href = 'dashboard.html';
   }
 
   // Starts the session — sets status to 'active' so guests can join,
