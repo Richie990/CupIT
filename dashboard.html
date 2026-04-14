@@ -569,10 +569,10 @@
 
     const all = data || [];
 
-    // Separate live and scheduled sessions
-    const live      = all.filter(s => s.status === 'active' || s.is_active === true);
+    // Separate live and scheduled sessions — use status as source of truth
+    const live      = all.filter(s => s.status === 'active');
     const scheduled = all.filter(s => s.status === 'scheduled');
-    const recent    = all.filter(s => s.status !== 'active' && s.status !== 'scheduled' && !s.is_active);
+    const recent    = all.filter(s => s.status !== 'active' && s.status !== 'scheduled');
 
     // Render live and scheduled sessions
     renderLiveSessions(live, scheduled, userId);
