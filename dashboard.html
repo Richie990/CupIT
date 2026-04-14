@@ -378,6 +378,7 @@
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="config.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.json" />
@@ -463,6 +464,24 @@
 
 </main>
 
+
+<!-- ── SHARE MODAL ── -->
+<div id="share-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,35,25,0.45);z-index:300;backdrop-filter:blur(4px)" onclick="closeShareModal()"></div>
+<div id="share-modal" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:301;background:#1a2319;border-radius:20px 20px 0 0;padding:28px 24px 48px;box-shadow:0 -8px 40px rgba(0,0,0,0.3)">
+  <div style="width:36px;height:4px;background:rgba(232,228,217,0.2);border-radius:2px;margin:0 auto 24px"></div>
+  <p style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:400;color:#e8e4d9;margin-bottom:4px">Invite <em>guests</em></p>
+  <p style="font-size:0.82rem;color:#8faa8b;margin-bottom:24px;line-height:1.6">Share this link or QR code so guests can join.</p>
+  <div id="share-modal-qr" style="display:flex;justify-content:center;margin-bottom:20px"></div>
+  <p style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;margin-bottom:8px">Or copy the link</p>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:24px">
+    <input id="share-modal-link" type="text" readonly
+      style="flex:1;padding:10px 14px;background:rgba(232,228,217,0.08);border:1.5px solid rgba(232,228,217,0.15);border-radius:10px;font-family:'DM Mono',monospace;font-size:0.6rem;color:#e8e4d9;outline:none" />
+    <button onclick="copyShareModalLink()" id="share-modal-copy-btn"
+      style="padding:10px 16px;background:rgba(232,228,217,0.12);color:#e8e4d9;border:1px solid rgba(232,228,217,0.25);border-radius:10px;font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap">Copy</button>
+  </div>
+  <button onclick="closeShareModal()"
+    style="width:100%;padding:13px;border-radius:50px;border:1.5px solid rgba(232,228,217,0.2);background:transparent;font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:#8faa8b;cursor:pointer">Close</button>
+</div>
 
 <!-- ── EDIT SESSION MODAL ── -->
 <div id="edit-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,35,25,0.45);z-index:300;backdrop-filter:blur(4px)" onclick="closeEditModal()"></div>
@@ -677,6 +696,7 @@
             <p class="status-meta">${(s.coffees||[]).length} coffee${(s.coffees||[]).length!==1?'s':''} · Live now</p>
           </div>
           <div class="status-actions">
+            <button class="status-btn cancel" onclick="showShareModal('${s.share_token}')">Share</button>
             <button class="status-btn end" onclick="endLiveSession('${s.share_token}', '${s.id}', this)">End session</button>
           </div>
         </div>`).join('');
@@ -717,6 +737,7 @@
         </div>
         <div class="status-actions">
           <button class="status-btn start" onclick="startScheduledSession('${s.share_token}', '${s.id}', this)">Start</button>
+          <button class="status-btn cancel" onclick="showShareModal('${s.share_token}')">Share</button>
           <button class="status-btn cancel" style="color:var(--mid);border-color:var(--divider);background:transparent" onclick="editScheduledSession('${s.share_token}', '${s.id}', this)">Edit</button>
           <button class="status-btn cancel" onclick="cancelScheduledSession('${s.share_token}', '${s.id}', this)">Cancel</button>
         </div>
@@ -797,6 +818,40 @@
     btn.closest('.status-card').remove();
     const remaining = document.querySelectorAll('#list-live .status-card');
     if (!remaining.length) document.getElementById('section-live').style.display = 'none';
+  }
+
+  // Share modal
+  function showShareModal(shareToken) {
+    const joinUrl = `https://richie990.github.io/CupIT/join.html?token=${shareToken}`;
+    document.getElementById('share-modal-link').value = joinUrl;
+
+    const qrContainer = document.getElementById('share-modal-qr');
+    qrContainer.innerHTML = '';
+    new QRCode(qrContainer, {
+      text:         joinUrl,
+      width:        180,
+      height:       180,
+      colorDark:    '#1a2319',
+      colorLight:   '#f0ede5',
+      correctLevel: QRCode.CorrectLevel.H,
+    });
+
+    document.getElementById('share-modal-overlay').style.display = 'block';
+    document.getElementById('share-modal').style.display = 'block';
+  }
+
+  function closeShareModal() {
+    document.getElementById('share-modal-overlay').style.display = 'none';
+    document.getElementById('share-modal').style.display = 'none';
+  }
+
+  function copyShareModalLink() {
+    const link = document.getElementById('share-modal-link').value;
+    navigator.clipboard.writeText(link).then(() => {
+      const btn = document.getElementById('share-modal-copy-btn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
   }
 
   // Edit modal state
