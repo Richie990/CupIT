@@ -437,7 +437,7 @@
     <div id="list-live"></div>
   </div>
 
-  <!-- Today's scheduled sessions -->
+  <!-- Today's sessions -->
   <div class="status-section" id="section-today" style="display:none">
     <div class="recent-header">
       <span class="recent-title" style="color:var(--accent)">Today</span>
@@ -740,7 +740,6 @@
         </div>
         <div class="status-actions">
           <button class="status-btn start" onclick="startScheduledSession('${s.share_token}', '${s.id}', this)">Start</button>
-          <button class="status-btn cancel" onclick="showShareModal('${s.share_token}')">Share</button>
           <button class="status-btn cancel" style="color:var(--mid);border-color:var(--divider);background:transparent" onclick="editScheduledSession('${s.share_token}', '${s.id}', this)">Edit</button>
           <button class="status-btn cancel" onclick="cancelScheduledSession('${s.share_token}', '${s.id}', this)">Cancel</button>
         </div>
