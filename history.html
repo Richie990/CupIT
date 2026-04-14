@@ -652,7 +652,7 @@
   async function loadSessions(userId) {
     const { data, error } = await window.supabaseClient
       .from('cupping_sessions')
-      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status')
+      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status, blind')
       .eq('user_id', userId)
       .order('id', { ascending: false });
 
@@ -671,6 +671,7 @@
       shareToken:  s.share_token || null,
       isActive:    s.is_active,
       status:      s.status || (s.is_active ? 'active' : 'ended'),
+      blind:       s.blind || false,
     }));
 
     // Update session count in header

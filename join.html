@@ -399,7 +399,7 @@
       // Fetch session using share token — check is_active too
       const { data, error } = await window.supabaseClient
         .from('cupping_sessions')
-        .select('session_name, coffees, params_active, is_active, status')
+        .select('session_name, coffees, params_active, is_active, status, blind')
         .eq('share_token', token)
         .single();
 
@@ -425,7 +425,8 @@
 
       // Update header
       document.getElementById('header-title').innerHTML = escHtml(data.session_name);
-      document.getElementById('header-sub').textContent = `${data.coffees.length} coffee${data.coffees.length > 1 ? 's' : ''} to taste`;
+      const blindMode = data.blind === true;
+      document.getElementById('header-sub').textContent = `${data.coffees.length} coffee${data.coffees.length > 1 ? 's' : ''} to taste${blindMode ? ' — blind cupping' : ''}`;
       document.getElementById('header-tag').textContent = 'You\'ve been invited';
 
       // Initialise guest coffees array
@@ -465,27 +466,46 @@
     const params   = new Set(sessionData.params_active || []);
     const coffees  = sessionData.coffees;
 
-    // Build tabs
+    const blind = sessionData.blind === true;
+
+    // Build tabs — in blind mode show Coffee 1, Coffee 2 etc.
     document.getElementById('guest-coffee-tabs').innerHTML = coffees.map((c, i) => `
       <button class="coffee-tab ${i === 0 ? 'active' : ''}" id="tab-${i}" onclick="switchCoffee(${i})">
-        ${escHtml(c.name)}
+        ${blind ? `Coffee ${i+1}` : escHtml(c.name)}
       </button>`
     ).join('');
 
     // Build panels
     document.getElementById('guest-coffee-panels').innerHTML = coffees.map((c, i) => `
       <div class="coffee-panel ${i === 0 ? 'active' : ''}" id="panel-${i}">
-        ${buildPanel(i, params)}
+        ${buildPanel(i, params, blind, c)}
       </div>`
     ).join('');
 
     updateNav();
   }
 
-  function buildPanel(idx, params) {
+  function buildPanel(idx, params, blind, coffeeData) {
     let html = `<div class="section-card">`;
 
-    // Host-only fields — set by the host during setup, not shown to guests
+    // If not blind mode, show coffee info set by host (read-only)
+    if (!blind && coffeeData) {
+      const meta = coffeeData.meta || {};
+      const infoFields = [
+        { id:'origin', label:'Origin' }, { id:'variety', label:'Variety' },
+        { id:'process', label:'Process' }, { id:'roaster', label:'Roaster' },
+        { id:'producer', label:'Producer' }, { id:'harvest', label:'Harvest Year' },
+        { id:'roast', label:'Roast Level' },
+      ];
+      const infoItems = infoFields.filter(f => meta[f.id]).map(f =>
+        `<span style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mid)">${f.label}: <span style="color:var(--brown)">${escHtml(meta[f.id])}</span></span>`
+      ).join('<br>');
+      if (infoItems) {
+        html += `<div style="margin-bottom:14px;padding:10px 12px;background:var(--bg);border-radius:8px;line-height:2">${infoItems}</div>`;
+      }
+    }
+
+    // Host-only fields — set by the host during setup, not shown as inputs to guests
     const HOST_ONLY = new Set(['origin','variety','producer','roaster','harvest','process','roast']);
 
     // Text fields — guests do not see host-only metadata
