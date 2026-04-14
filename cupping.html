@@ -670,6 +670,7 @@
   let realtimeSub  = null;    // supabase realtime subscription for guest count
   let scheduledAt  = null;    // ISO string if session is scheduled for a future time
   let recurrence   = 'none';  // 'none', 'weekly', 'biweekly', 'monthly'
+  let isScheduledSession = false; // true if host selected 'Later'
 
   let useTimer = false; // whether the user enabled the steep timer in setup
 
@@ -1324,9 +1325,8 @@
     const joinUrl = `https://richie990.github.io/CupIT/join.html?token=${shareToken}`;
 
     // Show correct action button based on whether session is scheduled
-    const isScheduled = document.getElementById('when-later').classList.contains('active');
-    document.getElementById('btn-start-session').style.display  = isScheduled ? 'none' : 'inline-flex';
-    document.getElementById('btn-save-scheduled').style.display = isScheduled ? 'inline-flex' : 'none';
+    document.getElementById('btn-start-session').style.display  = isScheduledSession ? 'none' : 'inline-flex';
+    document.getElementById('btn-save-scheduled').style.display = isScheduledSession ? 'inline-flex' : 'none';
 
     // Populate the share link input
     document.getElementById('share-link').value = joinUrl;
@@ -1475,6 +1475,7 @@
   function setWhen(val, btn) {
     document.querySelectorAll('#when-now, #when-later').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    isScheduledSession = (val === 'later');
     const fields = document.getElementById('schedule-fields');
     if (val === 'later') {
       fields.style.display = 'block';
@@ -1524,6 +1525,7 @@
     document.getElementById('blind-check').textContent = '';
     scheduledAt = null;
     recurrence  = 'none';
+    isScheduledSession = false;
     document.getElementById('schedule-fields').style.display = 'none';
     document.getElementById('when-now').classList.add('active');
     document.getElementById('when-later').classList.remove('active');
