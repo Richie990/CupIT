@@ -543,6 +543,7 @@
 
     setGreeting();
     await loadUser(session.user.id);
+    await processMissedSessions(session.user.id);
     await loadRecentSessions(session.user.id);
   }
 
@@ -568,6 +569,58 @@
     }
 
     document.getElementById('user-name').textContent = data.name || 'there';
+  }
+
+  // Checks for missed scheduled sessions and cancels/reschedules them
+  async function processMissedSessions(userId) {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Fetch all scheduled sessions where scheduled date has passed
+    const { data, error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .select('id, scheduled_at, recurrence, session_name, coffees, params_active, timer_enabled, blind, share_token')
+      .eq('user_id', userId)
+      .eq('status', 'scheduled')
+      .not('scheduled_at', 'is', null);
+
+    if (error || !data || !data.length) return;
+
+    for (const s of data) {
+      const schedDate = s.scheduled_at.split('T')[0];
+      if (schedDate >= today) continue; // not missed yet
+
+      // Mark as cancelled + missed
+      await window.supabaseClient
+        .from('cupping_sessions')
+        .update({ status: 'cancelled', missed: true })
+        .eq('id', s.id)
+        .eq('user_id', userId);
+
+      // If recurring, create next occurrence
+      if (s.recurrence === 'weekly' || s.recurrence === 'biweekly') {
+        const days   = s.recurrence === 'weekly' ? 7 : 14;
+        const next   = new Date(s.scheduled_at);
+        next.setDate(next.getDate() + days);
+        const newToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+
+        await window.supabaseClient
+          .from('cupping_sessions')
+          .insert({
+            user_id:       userId,
+            session_name:  s.session_name,
+            session_date:  next.toISOString().split('T')[0],
+            coffees:       s.coffees,
+            params_active: s.params_active,
+            timer_enabled: s.timer_enabled,
+            blind:         s.blind,
+            share_token:   newToken,
+            status:        'scheduled',
+            scheduled_at:  next.toISOString(),
+            recurrence:    s.recurrence,
+            missed:        false,
+          });
+      }
+    }
   }
 
   // Loads the 5 most recent sessions and any live sessions from cupping_sessions

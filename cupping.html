@@ -225,7 +225,7 @@
     .btn-back-action { width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0; background: var(--paper); border: 1px solid var(--divider); color: var(--mid); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
     .btn-back-action:hover { border-color: var(--brown); color: var(--brown); }
     .btn-primary-action { flex: 1; height: 52px; border-radius: 50px; background: var(--cream); color: var(--dark); font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; border: none; cursor: pointer; transition: all 0.2s; }
-    .btn-primary-action:hover { background: #ffffff; }
+    .btn-primary-action:hover { background: var(--brown); }
     .btn-primary-action.save { background: var(--cream); color: var(--dark); }
     .btn-primary-action.save:hover { background: #ffffff; }
 
@@ -286,7 +286,7 @@
     .saved-title em { font-style: italic; }
     .saved-sub { font-size: 0.9rem; color: var(--mid); line-height: 1.7; margin-bottom: 28px; }
     .btn-new { display: inline-flex; align-items: center; gap: 8px; background: var(--cream); color: var(--dark); font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 28px; border-radius: 50px; border: none; cursor: pointer; transition: background 0.2s; }
-    .btn-new:hover { background: #ffffff; }
+    .btn-new:hover { background: var(--brown); }
 
     /* TIMER */
     .timer-toggle-btn {
@@ -389,22 +389,19 @@
         <button class="recurrence-btn" id="when-later" onclick="setWhen('later',this)">Later</button>
       </div>
       <div id="schedule-fields" style="display:none;margin-top:16px">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-          <div style="flex:1;min-width:140px">
-            <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:5px">Date</label>
-            <input type="date" id="schedule-date" class="form-input" style="width:100%" />
-          </div>
-          <div style="flex:1;min-width:120px">
-            <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:5px">Time</label>
-            <input type="time" id="schedule-time" class="form-input" style="width:100%" />
-          </div>
+        <div style="margin-bottom:14px">
+          <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:5px">Date</label>
+          <input type="date" id="schedule-date" class="form-input" style="width:100%" />
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:5px">Time <span style="color:var(--light);font-size:0.5rem;letter-spacing:0.06em">Optional — shown to guests</span></label>
+          <input type="time" id="schedule-time" class="form-input" style="width:100%" />
         </div>
         <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:8px">Repeat</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="recurrence-btn active" id="rec-none"     onclick="setRecurrence('none',this)">One-off</button>
           <button class="recurrence-btn"         id="rec-weekly"  onclick="setRecurrence('weekly',this)">Weekly</button>
           <button class="recurrence-btn"         id="rec-biweekly" onclick="setRecurrence('biweekly',this)">Bi-weekly</button>
-          <button class="recurrence-btn"         id="rec-monthly" onclick="setRecurrence('monthly',this)">Monthly</button>
         </div>
       </div>
     </div>
@@ -1281,11 +1278,12 @@
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session) { window.location.href = 'signup.html'; return; }
 
-    // Build scheduledAt from date/time inputs if scheduling is enabled
+    // Build scheduledAt — time is optional
     const schedDate = document.getElementById('schedule-date').value;
     const schedTime = document.getElementById('schedule-time').value;
-    if (schedDate && schedTime) {
-      scheduledAt = new Date(`${schedDate}T${schedTime}`).toISOString();
+    if (schedDate) {
+      const timeStr = schedTime || '00:00';
+      scheduledAt = new Date(`${schedDate}T${timeStr}`).toISOString();
     }
 
     // Generate a random token if we don't have one yet
@@ -1312,6 +1310,7 @@
           blind:         blindCupping,
           scheduled_at:  scheduledAt || null,
           recurrence:    recurrence,
+          missed:        false,
         });
 
       if (error) {
