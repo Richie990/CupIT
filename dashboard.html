@@ -260,10 +260,10 @@
     .status-btn.cancel { color: var(--mid); border-color: var(--divider); background: transparent; }
     .status-btn.cancel:hover { color: var(--brown); border-color: var(--brown); }
     .edit-coffee-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-    .edit-coffee-input { flex:1; padding:10px 14px; background:var(--bg); border:1.5px solid var(--divider); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.88rem; color:var(--dark); outline:none; transition:border-color 0.2s; }
-    .edit-coffee-input:focus { border-color:var(--accent); }
-    .edit-coffee-remove { width:28px; height:28px; border-radius:50%; background:rgba(45,59,45,0.06); border:none; color:var(--mid); font-size:0.75rem; cursor:pointer; flex-shrink:0; transition:all 0.15s; }
-    .edit-coffee-remove:hover { background:rgba(201,168,76,0.12); color:var(--accent); }
+    .edit-coffee-input { flex:1; padding:10px 14px; background:rgba(232,228,217,0.08); border:1.5px solid rgba(232,228,217,0.15); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.88rem; color:#e8e4d9; outline:none; transition:border-color 0.2s; }
+    .edit-coffee-input:focus { border-color:rgba(201,168,76,0.6); }
+    .edit-coffee-remove { width:28px; height:28px; border-radius:50%; background:rgba(232,228,217,0.08); border:none; color:#8faa8b; font-size:0.75rem; cursor:pointer; flex-shrink:0; transition:all 0.15s; }
+    .edit-coffee-remove:hover { background:rgba(201,168,76,0.15); color:#c9a84c; }
 
     /* ── RECENT SESSIONS ── */
     .recent-section {
@@ -466,32 +466,32 @@
 
 <!-- ── EDIT SESSION MODAL ── -->
 <div id="edit-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,35,25,0.45);z-index:300;backdrop-filter:blur(4px)" onclick="closeEditModal()"></div>
-<div id="edit-modal" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:301;background:var(--paper);border-radius:20px 20px 0 0;padding:28px 24px 48px;max-height:75vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(26,35,25,0.15)">
-  <div style="width:36px;height:4px;background:var(--divider);border-radius:2px;margin:0 auto 24px"></div>
-  <p style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:400;color:var(--brown);margin-bottom:4px">Edit <em>session</em></p>
-  <p style="font-size:0.82rem;color:var(--mid);margin-bottom:24px;line-height:1.6">Add or remove coffees before the session starts.</p>
+<div id="edit-modal" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:301;background:#1a2319;border-radius:20px 20px 0 0;padding:28px 24px 48px;max-height:75vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,0.3)">
+  <div style="width:36px;height:4px;background:rgba(232,228,217,0.2);border-radius:2px;margin:0 auto 24px"></div>
+  <p style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:400;color:#e8e4d9;margin-bottom:4px">Edit <em>session</em></p>
+  <p style="font-size:0.82rem;color:#8faa8b;margin-bottom:24px;line-height:1.6">Add or remove coffees before the session starts.</p>
 
-  <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:6px">Session name</label>
+  <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;display:block;margin-bottom:6px">Session name</label>
   <input type="text" id="edit-session-name"
-    style="width:100%;padding:11px 14px;background:var(--bg);border:1.5px solid var(--divider);border-radius:var(--r);font-family:'DM Sans',sans-serif;font-size:0.92rem;color:var(--dark);outline:none;margin-bottom:20px;transition:border-color 0.2s"
-    onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--divider)'" />
+    style="width:100%;padding:11px 14px;background:rgba(232,228,217,0.08);border:1.5px solid rgba(232,228,217,0.15);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:0.92rem;color:#e8e4d9;outline:none;margin-bottom:20px;box-sizing:border-box;transition:border-color 0.2s"
+    onfocus="this.style.borderColor='rgba(201,168,76,0.6)'" onblur="this.style.borderColor='rgba(232,228,217,0.15)'" />
 
-  <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:10px">Coffees</label>
+  <label style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;display:block;margin-bottom:10px">Coffees</label>
   <div id="edit-coffee-list" style="margin-bottom:12px"></div>
   <button onclick="addEditCoffee()"
-    style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);background:none;border:none;cursor:pointer;padding:4px 0;margin-bottom:24px">
+    style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:#c9a84c;background:none;border:none;cursor:pointer;padding:4px 0;margin-bottom:24px">
     + Add coffee
   </button>
 
   <div style="display:flex;gap:10px">
     <button onclick="closeEditModal()"
-      style="flex:1;padding:13px;border-radius:50px;border:1.5px solid var(--divider);background:transparent;font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);cursor:pointer;transition:all 0.2s"
-      onmouseover="this.style.borderColor='var(--brown)';this.style.color='var(--brown)'"
-      onmouseout="this.style.borderColor='var(--divider)';this.style.color='var(--mid)'">Cancel</button>
+      style="flex:1;padding:13px;border-radius:50px;border:1.5px solid rgba(232,228,217,0.2);background:transparent;font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:#8faa8b;cursor:pointer;transition:all 0.2s;white-space:nowrap"
+      onmouseover="this.style.borderColor='rgba(232,228,217,0.4)';this.style.color='#e8e4d9'"
+      onmouseout="this.style.borderColor='rgba(232,228,217,0.2)';this.style.color='#8faa8b'">Cancel</button>
     <button onclick="saveEditSession()" id="btn-save-edit"
-      style="flex:2;padding:13px;border-radius:50px;border:1px solid rgba(26,35,25,0.5);background:rgba(26,35,25,0.75);color:var(--cream);font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;white-space:nowrap"
-      onmouseover="this.style.background='rgba(26,35,25,0.9)'"
-      onmouseout="this.style.background='rgba(26,35,25,0.75)'">Save changes</button>
+      style="flex:2;padding:13px;border-radius:50px;border:1px solid rgba(232,228,217,0.25);background:rgba(232,228,217,0.12);color:#e8e4d9;font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;white-space:nowrap"
+      onmouseover="this.style.background='rgba(232,228,217,0.2)'"
+      onmouseout="this.style.background='rgba(232,228,217,0.12)'">Save changes</button>
   </div>
 </div>
 
