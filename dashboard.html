@@ -660,7 +660,7 @@
     // Separate live and scheduled sessions — use status as source of truth
     const live      = all.filter(s => s.status === 'active');
     const scheduled = all.filter(s => s.status === 'scheduled');
-    const recent    = all.filter(s => s.status !== 'active' && s.status !== 'scheduled');
+    const recent    = all.filter(s => s.status !== 'active' && s.status !== 'scheduled' && s.status !== 'cancelled');
 
     // Render live and scheduled sessions
     renderLiveSessions(live, scheduled, userId);
@@ -680,8 +680,11 @@
   function renderLiveSessions(liveSessions, scheduledSessions, userId) {
     const today = new Date().toISOString().split('T')[0];
 
-    const todaySessions    = scheduledSessions.filter(s => s.scheduled_at && s.scheduled_at.split('T')[0] === today);
-    const upcomingSessions = scheduledSessions.filter(s => !s.scheduled_at || s.scheduled_at.split('T')[0] !== today);
+    // Unscheduled = no scheduled_at (created as Now), always show in Today
+    const unscheduled      = scheduledSessions.filter(s => !s.scheduled_at);
+    const todayScheduled   = scheduledSessions.filter(s => s.scheduled_at && s.scheduled_at.split('T')[0] === today);
+    const todaySessions    = [...unscheduled, ...todayScheduled];
+    const upcomingSessions = scheduledSessions.filter(s => s.scheduled_at && s.scheduled_at.split('T')[0] !== today);
 
     // Live
     const sectionLive = document.getElementById('section-live');

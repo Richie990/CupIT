@@ -468,42 +468,13 @@
 
   <div class="action-bar">
     <div class="action-bar-inner">
-      <button class="btn-primary-action" onclick="goToShare()">Generate invite →</button>
+      <button class="btn-primary-action" onclick="saveSession()">Save session →</button>
     </div>
   </div>
 </div>
 
 
-<!-- ══ SHARE ══ -->
-<div class="view" id="view-share">
-  <div class="view-inner">
-    <p class="view-title" style="margin-bottom:6px">Invite guests</p>
-    <p class="view-sub">Share this QR code or link so guests can join the session on their device. They don't need an account.</p>
 
-    <div class="section-card" style="text-align:center;margin-top:20px">
-      <div id="qr-code" style="display:flex;justify-content:center;margin-bottom:16px"></div>
-      <p style="font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);margin-bottom:8px">Or copy the link</p>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="share-link" type="text" readonly
-          style="flex:1;padding:10px 14px;background:var(--bg);border:1.5px solid var(--divider);border-radius:10px;font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--brown);outline:none" />
-        <button onclick="copyLink()" style="padding:10px 16px;background:var(--cream);color:var(--dark);border:none;border-radius:10px;font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap" id="copy-btn">Copy</button>
-      </div>
-    </div>
-
-    <div class="section-card" style="margin-top:12px">
-      <p style="font-size:0.82rem;color:var(--mid);line-height:1.7" id="share-info-text">
-        Guests can join as soon as you start the session. Share the link or QR code in advance so they're ready.
-      </p>
-    </div>
-  </div>
-  <div class="action-bar">
-    <div class="action-bar-inner">
-      <button class="btn-back-action" onclick="goTo('setup')">←</button>
-      <button class="btn-primary-action" id="btn-start-session" onclick="startSession()">Start session →</button>
-      <button class="btn-primary-action" id="btn-save-scheduled" onclick="saveScheduled()" style="display:none">Save &amp; schedule →</button>
-    </div>
-  </div>
-</div>
 
 
 <!-- ══ HOST MANAGE ══ -->
@@ -1186,7 +1157,7 @@
     document.getElementById('view-' + view).classList.add('active');
     currentView = view;
     // Phase bar: setup=1, share=1, host-manage=2, cupping=2, review/saved=3
-    const map = { setup:1, share:1, 'host-manage':2, cupping:2, review:3, saved:3 };
+    const map = { setup:1, 'host-manage':2, cupping:2, review:3, saved:3 };
     const active = map[view]||1;
     [1,2,3].forEach(n => {
       document.getElementById('phase-'+n).classList.toggle('active', n===active);
@@ -1260,9 +1231,8 @@
     goTo('saved');
   }
 
-  // Generates a share token, inserts a placeholder session row so guests
-  // can join immediately, then shows the share view with QR code.
-  async function goToShare() {
+  // Creates the session with share token and redirects to dashboard
+  async function saveSession() {
     const named = coffees.filter(c => c.name.trim());
     if (!named.length) {
       document.querySelector('.coffee-entry-input')?.focus();
@@ -1275,7 +1245,6 @@
       return;
     }
 
-    // Get current authenticated user
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session) { window.location.href = 'signup.html'; return; }
 
@@ -1287,67 +1256,37 @@
       scheduledAt = new Date(`${schedDate}T${timeStr}`).toISOString();
     }
 
-    // Generate a random token if we don't have one yet
-    if (!shareToken) {
-      shareToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    // Generate share token
+    shareToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 
-      // Insert a placeholder row so guests can find the session immediately
-      const sessionName = document.getElementById('session-name').value.trim() || 'Untitled session';
-      const { error } = await window.supabaseClient
-        .from('cupping_sessions')
-        .insert({
-          user_id:       session.user.id,
-          session_name:  sessionName,
-          session_date:  new Date().toISOString().split('T')[0],
-          coffees:       coffees.filter(c => c.name.trim()).map(c => ({
-            name: c.name,
-            meta: c.meta || {},
-            data: c.data || {},
-          })),
-          params_active: [...activeParams],
-          timer_enabled: useTimer,
-          share_token:   shareToken,
-          status:        'scheduled',
-          blind:         blindCupping,
-          scheduled_at:  scheduledAt || null,
-          recurrence:    recurrence,
-          missed:        false,
-        });
+    const { error } = await window.supabaseClient
+      .from('cupping_sessions')
+      .insert({
+        user_id:       session.user.id,
+        session_name:  sessionName,
+        session_date:  new Date().toISOString().split('T')[0],
+        coffees:       coffees.filter(c => c.name.trim()).map(c => ({
+          name: c.name,
+          meta: c.meta || {},
+          data: c.data || {},
+        })),
+        params_active: [...activeParams],
+        timer_enabled: useTimer,
+        share_token:   shareToken,
+        status:        'scheduled',
+        blind:         blindCupping,
+        scheduled_at:  scheduledAt || null,
+        recurrence:    recurrence,
+        missed:        false,
+      });
 
-      if (error) {
-        console.error('Error creating session:', error.message);
-        alert('There was a problem creating the session. Please try again.');
-        shareToken = null;
-        return;
-      }
+    if (error) {
+      console.error('Error creating session:', error.message);
+      alert('There was a problem saving the session. Please try again.');
+      shareToken = null;
+      return;
     }
 
-    const joinUrl = `https://richie990.github.io/CupIT/join.html?token=${shareToken}`;
-
-    // Show correct action button based on whether session is scheduled
-    document.getElementById('btn-start-session').style.display  = isScheduledSession ? 'none' : 'inline-flex';
-    document.getElementById('btn-save-scheduled').style.display = isScheduledSession ? 'inline-flex' : 'none';
-
-    // Populate the share link input
-    document.getElementById('share-link').value = joinUrl;
-
-    // Generate QR code using qrcodejs
-    const qrContainer = document.getElementById('qr-code');
-    qrContainer.innerHTML = '';
-    new QRCode(qrContainer, {
-      text:           joinUrl,
-      width:          200,
-      height:         200,
-      colorDark:      '#1a2319',
-      colorLight:     '#f0ede5',
-      correctLevel:   QRCode.CorrectLevel.H,
-    });
-
-    goTo('share');
-  }
-
-  // For scheduled sessions — session is already saved as 'scheduled', just go to dashboard
-  async function saveScheduled() {
     window.location.href = 'dashboard.html';
   }
 
@@ -1462,15 +1401,6 @@
     goTo('saved');
   }
 
-  // Copies the share link to clipboard
-  function copyLink() {
-    const link = document.getElementById('share-link').value;
-    navigator.clipboard.writeText(link).then(() => {
-      const btn = document.getElementById('copy-btn');
-      btn.textContent = 'Copied!';
-      setTimeout(() => btn.textContent = 'Copy', 2000);
-    });
-  }
   // Handles the Now / Later toggle
   function setWhen(val, btn) {
     document.querySelectorAll('#when-now, #when-later').forEach(b => b.classList.remove('active'));
