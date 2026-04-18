@@ -498,6 +498,7 @@
     tbody tr { animation: fadeUp 0.2s ease both; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="config.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.json" />
@@ -614,9 +615,11 @@
     <div class="drawer-toggle" id="drawer-toggle" style="display:none">
       <button class="drawer-toggle-btn active" id="toggle-host" onclick="switchDrawerView('host')">Your notes</button>
       <button class="drawer-toggle-btn" id="toggle-guests" onclick="switchDrawerView('guests')">Guest responses</button>
+      <button class="drawer-toggle-btn" id="toggle-report" onclick="switchDrawerView('report')">Report</button>
     </div>
     <div id="drawer-host-content"></div>
     <div id="drawer-guest-content" style="display:none"></div>
+    <div id="drawer-report-content" style="display:none"></div>
   </div>
   <div class="drawer-footer">
     <button class="drawer-btn drawer-btn-ghost" onclick="closeDrawer()">Close</button>

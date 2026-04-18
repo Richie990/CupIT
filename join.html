@@ -272,6 +272,17 @@
     .btn-coffee-nav:disabled { opacity: 0.3; pointer-events: none; }
 
     /* Submit button */
+    .scale-pill-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .guest-scale-pill {
+      padding: 7px 14px; border-radius: 50px;
+      border: 1.5px solid var(--divider);
+      background: transparent; color: var(--mid);
+      font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .guest-scale-pill:hover { border-color: var(--accent); color: var(--accent); }
+    .guest-scale-pill.active { background: rgba(201,168,76,0.1); color: var(--accent); border-color: var(--accent); }
+
     .btn-submit-session {
       width: 100%; padding: 15px; margin-top: 20px;
       background: var(--dark); color: var(--cream);
@@ -628,22 +639,31 @@
     // Process select — host only
     // Roast level select — host only
 
-    // Textarea fields
-    const textareaFields = [
-      { id:'dry_aroma',  label:'Dry Aroma',   placeholder:'Aroma from dry grounds...' },
-      { id:'wet_aroma',  label:'Wet Aroma',   placeholder:'Aroma after adding water...' },
-      { id:'body',       label:'Body',        placeholder:'e.g. Silky, Syrupy, Full, Watery...' },
-      { id:'aftertaste', label:'Aftertaste',  placeholder:'Finish length and quality...' },
-      { id:'notes',      label:'Tasting notes',placeholder:'Free-form impressions...' },
-    ];
-    textareaFields.forEach(f => {
-      if (params.has(f.id)) {
+    // Scale fields — qualitative pill selectors
+    const SCALE_FIELDS = {
+      body:      { label:'Body',       options:['None','Light','Round','Full','Syrupy'] },
+      dry_aroma: { label:'Dry Aroma',  options:['Faint','Delicate','Moderate','Intense','Complex'] },
+      wet_aroma: { label:'Wet Aroma',  options:['Faint','Delicate','Moderate','Intense','Complex'] },
+      aftertaste:{ label:'Aftertaste', options:['Short','Medium','Long','Lingering'] },
+    };
+    Object.entries(SCALE_FIELDS).forEach(([id, field]) => {
+      if (params.has(id)) {
         html += `<div class="form-group">
-          <label class="form-label">${f.label}</label>
-          <textarea class="form-textarea" id="${f.id}-${idx}" placeholder="${f.placeholder}"></textarea>
+          <label class="form-label">${field.label}</label>
+          <div class="scale-pill-group" id="${id}-${idx}" data-field="${id}" data-idx="${idx}">
+            ${field.options.map(o => `<button type="button" class="guest-scale-pill" onclick="selectScalePill(this,'${id}-${idx}','${id}',${idx},'${o}')">${o}</button>`).join('')}
+          </div>
         </div>`;
       }
     });
+
+    // Tasting notes — free text
+    if (params.has('notes')) {
+      html += `<div class="form-group">
+        <label class="form-label">Tasting notes</label>
+        <textarea class="form-textarea" id="notes-${idx}" placeholder="Free-form impressions..."></textarea>
+      </div>`;
+    }
 
     // Flavours
     if (params.has('flavours')) {
@@ -665,6 +685,12 @@
 
     html += `</div>`;
     return html;
+  }
+
+  // Scale pill selection for guests
+  function selectScalePill(btn, groupId, fieldId, idx, val) {
+    document.querySelectorAll(`#${groupId} .guest-scale-pill`).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
   }
 
   // ── FLAVOUR WHEEL ──
@@ -752,13 +778,18 @@
       // Host-only fields — not collected from guests
       const HOST_ONLY = new Set(['origin','variety','producer','roaster','harvest','process','roast']);
 
-      // Textarea fields — sensory/tasting fields only
-      ['dry_aroma','wet_aroma','body','aftertaste','notes'].forEach(k => {
+      // Scale fields — read active pill
+      ['body','dry_aroma','wet_aroma','aftertaste'].forEach(k => {
         if (params.has(k)) {
-          const el = document.getElementById(`${k}-${i}`);
-          if (el && el.value.trim()) data[k] = el.value.trim();
+          const active = document.querySelector(`#${k}-${i} .guest-scale-pill.active`);
+          if (active) data[k] = active.textContent.trim();
         }
       });
+      // Tasting notes — free text
+      if (params.has('notes')) {
+        const el = document.getElementById(`notes-${i}`);
+        if (el && el.value.trim()) data['notes'] = el.value.trim();
+      }
 
       if (params.has('flavours')) {
         data.flavours = [...flavourPicks[i]];

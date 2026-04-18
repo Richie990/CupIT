@@ -217,6 +217,16 @@
     .coffee-meta-fields .form-input { width: 100%; padding: 8px 12px; background: rgba(232,228,217,0.06); border: 1.5px solid rgba(232,228,217,0.12); border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; color: #e8e4d9; outline: none; transition: border-color 0.2s; }
     .coffee-meta-fields .form-input:focus { border-color: rgba(201,168,76,0.6); }
     .coffee-meta-fields .form-input::placeholder { color: rgba(143,170,139,0.5); font-style: italic; }
+    .scale-pill {
+      padding: 7px 14px; border-radius: 50px;
+      border: 1.5px solid rgba(232,228,217,0.15);
+      background: transparent; color: #8faa8b;
+      font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .scale-pill:hover { border-color: rgba(201,168,76,0.4); color: #c9a84c; }
+    .scale-pill.active { background: rgba(201,168,76,0.2); color: #c9a84c; border-color: rgba(201,168,76,0.4); }
+
     .btn-add-coffee { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 16px; background: none; border: 1.5px dashed var(--divider); border-radius: var(--r); color: var(--mid); font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: all 0.18s; }
     .btn-add-coffee:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -599,10 +609,10 @@
     // ── Default OFF ──
     { id:'roast',     label:'Roast Level',  type:'select', options:['Light','Medium-Light','Medium','Medium-Dark','Dark'] },
     { id:'harvest',   label:'Harvest Year', type:'text',   placeholder:'e.g. 2024' },
-    { id:'body',      label:'Body',         type:'textarea',placeholder:'e.g. Silky, Syrupy, Full, Watery...' },
-    { id:'dry_aroma', label:'Dry Aroma',    type:'textarea',placeholder:'Aroma from dry grounds...' },
-    { id:'wet_aroma', label:'Wet Aroma',    type:'textarea',placeholder:'Aroma after adding water...' },
-    { id:'aftertaste',label:'Aftertaste',   type:'textarea',placeholder:'Finish length and quality...' },
+    { id:'body',      label:'Body',         type:'scale', options:['None','Light','Round','Full','Syrupy'] },
+    { id:'dry_aroma', label:'Dry Aroma',    type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
+    { id:'wet_aroma', label:'Wet Aroma',    type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
+    { id:'aftertaste',label:'Aftertaste',   type:'scale', options:['Short','Medium','Long','Lingering'] },
   ];
 
   // WHEEL defines the flavour picker structure.
@@ -962,6 +972,18 @@
       .filter(p => activeParams.has(p.id))
       .map(p => {
         if (p.type === 'flavours') return buildFlavourPicker(ci);
+        if (p.type === 'scale') {
+          const val = coffees[ci].data[p.id] || '';
+          return `
+            <div class="section-card">
+              <p class="section-card-title">${p.label}</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                ${p.options.map(o => `
+                  <button class="scale-pill${val===o?' active':''}"
+                    onclick="saveScaleField(${ci},'${p.id}','${o}',this)">${o}</button>`).join('')}
+              </div>
+            </div>`;
+        }
         if (p.type === 'textarea') return `
           <div class="section-card">
             <p class="section-card-title">${p.label}</p>
