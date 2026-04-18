@@ -685,7 +685,9 @@
           shareToken   = data.share_token;
           useTimer     = data.timer_enabled || false;
           coffees      = (data.coffees || []).map(c => ({ name: c.name, meta: c.meta || {}, data: c.data || {} }));
-          activeParams = new Set(data.params_active || []);
+          // Host cups like a guest — only sensory fields, metadata already set at setup
+          const HOST_ONLY = new Set(['origin','variety','process','roaster','producer','harvest','roast']);
+          activeParams = new Set([...(data.params_active || [])].filter(p => !HOST_ONLY.has(p)));
           document.getElementById('session-name').value = data.session_name || '';
 
           buildParamGrid();
