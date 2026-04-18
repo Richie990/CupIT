@@ -720,6 +720,7 @@
             <p class="status-meta">${(s.coffees||[]).length} coffee${(s.coffees||[]).length!==1?'s':''} · Live now</p>
           </div>
           <div class="status-actions">
+            <button class="status-btn start" onclick="window.location.href='cupping.html?token=${s.share_token}'">Cup</button>
             <button class="status-btn cancel" onclick="showShareModal('${s.share_token}')">Share</button>
             <button class="status-btn end" onclick="endLiveSession('${s.share_token}', '${s.id}', this)">End session</button>
           </div>
