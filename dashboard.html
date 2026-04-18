@@ -850,9 +850,7 @@
       return;
     }
 
-    btn.closest('.status-card').remove();
-    const remaining = document.querySelectorAll('#list-live .status-card');
-    if (!remaining.length) document.getElementById('section-live').style.display = 'none';
+    await loadRecentSessions(session.user.id);
   }
 
   // Ends a live session from the dashboard
@@ -875,10 +873,8 @@
       return;
     }
 
-    // Remove the card from the live list
-    btn.closest('.status-card').remove();
-    const remaining = document.querySelectorAll('#list-live .status-card');
-    if (!remaining.length) document.getElementById('section-live').style.display = 'none';
+    // Full reload so all sections reflect the new state
+    await loadRecentSessions(session.user.id);
   }
 
   // Share modal
@@ -924,14 +920,14 @@
     editSessionId  = sessionId;
     editShareToken = shareToken;
 
-    // Fetch current session data
+    // Fetch current session data — only allow editing scheduled sessions
     const { data } = await window.supabaseClient
       .from('cupping_sessions')
-      .select('session_name, coffees')
+      .select('session_name, coffees, status')
       .eq('id', sessionId)
       .single();
 
-    if (!data) return;
+    if (!data || data.status !== 'scheduled') return;
 
     document.getElementById('edit-session-name').value = data.session_name || '';
     editCoffees = (data.coffees || []).map(c => ({ name: c.name, meta: c.meta || {}, data: c.data || {} }));
