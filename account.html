@@ -276,6 +276,23 @@
   <meta name="robots" content="noindex, nofollow" />
 </head>
 <body>
+<!-- SVG colour blind filter — deuteranopia/protanopia (red-green) -->
+<svg style="position:absolute;width:0;height:0" aria-hidden="true">
+  <defs>
+    <filter id="deuteranopia-filter" color-interpolation-filters="linearRGB">
+      <feColorMatrix type="matrix" values="0.367 0.861 -0.228 0 0
+                                            0.280 0.673  0.047 0 0
+                                           -0.012 0.043  0.969 0 0
+                                            0     0      0     1 0"/>
+    </filter>
+  </defs>
+</svg>
+<script>
+  // Apply colour blind mode immediately from localStorage to avoid flash
+  if (localStorage.getItem('cupit_cb') === '1') {
+    document.documentElement.style.filter = 'url(#deuteranopia-filter)';
+  }
+</script>
 
 <nav class="top-nav">
   <a href="dashboard.html" class="nav-logo">Cup<em>IT</em></a>
@@ -368,6 +385,22 @@
         <span class="detail-label">Loading...</span>
       </div>
     </div>
+  </div>
+
+  <!-- Accessibility -->
+  <div class="settings-card">
+    <span class="settings-card-title">Accessibility</span>
+    <p class="card-desc">Enable colour blind mode to adjust the colour scheme for better visibility.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+      <div>
+        <p style="font-size:0.88rem;font-weight:500;color:var(--brown);margin-bottom:2px">Colour blind mode</p>
+        <p style="font-size:0.8rem;color:var(--mid)">Optimised for deuteranopia and protanopia (red/green)</p>
+      </div>
+      <div id="cb-toggle" onclick="toggleColourBlind()" style="width:44px;height:24px;border-radius:12px;background:var(--divider);cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0;margin-left:16px">
+        <div id="cb-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+      </div>
+    </div>
+    <p class="status-msg" id="cb-status"></p>
   </div>
 
   <!-- Export data -->
@@ -532,7 +565,7 @@
   async function loadProfile(user) {
     const { data } = await window.supabaseClient
       .from('profiles')
-      .select('name, company, occupation, use_type, created_at')
+      .select('name, company, occupation, use_type, created_at, colour_blind_mode')
       .eq('user_id', user.id)
       .single();
 
@@ -551,6 +584,53 @@
         <span class="detail-value">${escHtml(String(r.value))}</span>
       </div>`
     ).join('');
+
+    // Apply colour blind mode toggle state
+    setColourBlindUI(data?.colour_blind_mode || false);
+    applyColourBlindMode(data?.colour_blind_mode || false);
+  }
+
+  // ── COLOUR BLIND MODE ──
+  async function toggleColourBlind() {
+    const status = document.getElementById('cb-status');
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) return;
+
+    const current = document.getElementById('cb-toggle').dataset.state === 'on';
+    const next = !current;
+
+    const { error } = await window.supabaseClient
+      .from('profiles')
+      .update({ colour_blind_mode: next })
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      status.textContent = 'Could not save preference.';
+      return;
+    }
+
+    setColourBlindUI(next);
+    applyColourBlindMode(next);
+    status.textContent = next ? 'Colour blind mode enabled.' : 'Colour blind mode disabled.';
+    setTimeout(() => status.textContent = '', 2000);
+  }
+
+  function setColourBlindUI(enabled) {
+    const toggle = document.getElementById('cb-toggle');
+    const knob   = document.getElementById('cb-knob');
+    toggle.dataset.state = enabled ? 'on' : 'off';
+    toggle.style.background = enabled ? '#c9a84c' : 'var(--divider)';
+    knob.style.transform = enabled ? 'translateX(20px)' : 'translateX(0)';
+  }
+
+  function applyColourBlindMode(enabled) {
+    if (enabled) {
+      document.documentElement.style.filter = 'url(#deuteranopia-filter)';
+      localStorage.setItem('cupit_cb', '1');
+    } else {
+      document.documentElement.style.filter = '';
+      localStorage.removeItem('cupit_cb');
+    }
   }
 
   // ── EXPORT DATA ──
