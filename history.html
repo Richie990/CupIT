@@ -644,7 +644,10 @@
   let sessions     = [];      // full session array from loadSessions()
   let sortCol      = 'date';  // currently sorted column
   let sortAsc      = false;   // false = newest first (descending)
-  let activeDrawerId = null;  // id of the session currently in the drawer
+  let activeDrawerId  = null;  // id of the session currently in the drawer
+  let currentSession  = null;  // full session object currently open in drawer
+  let reportBuilt     = false; // whether report has been rendered for this session
+  let bubbleChartInst = null;  // Chart.js bubble chart instance
   let debounceTimer  = null;  // for text input debounce
 
   // ══════════════════════════════════════════════════════════
@@ -856,6 +859,11 @@
     if (!session) return;
 
     activeDrawerId = id;
+    currentSession = session;
+    currentSession.responses = [];
+    reportBuilt = false;
+    if (bubbleChartInst) { try { bubbleChartInst.destroy(); } catch(e){} bubbleChartInst = null; }
+    document.getElementById('drawer-report-content').innerHTML = '';
 
     track('session_detail_opened', {
       session_id: id,
@@ -929,6 +937,7 @@
           .order('created_at', { ascending: true });
 
         const count = (responses || []).length;
+        currentSession.responses = responses || [];
         document.getElementById('toggle-guests').textContent = `Guest responses (${count})`;
         document.getElementById('drawer-toggle').style.display = 'flex';
 
@@ -975,10 +984,147 @@
   }
 
   function switchDrawerView(view) {
-    document.getElementById('drawer-host-content').style.display = view === 'host' ? 'block' : 'none';
-    document.getElementById('drawer-guest-content').style.display = view === 'guests' ? 'block' : 'none';
-    document.getElementById('toggle-host').classList.toggle('active', view === 'host');
+    document.getElementById('drawer-host-content').style.display   = view === 'host'   ? 'block' : 'none';
+    document.getElementById('drawer-guest-content').style.display  = view === 'guests' ? 'block' : 'none';
+    document.getElementById('drawer-report-content').style.display = view === 'report' ? 'block' : 'none';
+    document.getElementById('toggle-host').classList.toggle('active',   view === 'host');
     document.getElementById('toggle-guests').classList.toggle('active', view === 'guests');
+    document.getElementById('toggle-report').classList.toggle('active', view === 'report');
+    if (view === 'report') buildReport();
+  }
+
+  // ── REPORT ──
+  function buildReport() {
+    if (reportBuilt) return;
+    reportBuilt = true;
+    const s = currentSession;
+    if (!s) return;
+
+    const coffees   = s.coffees || [];
+    const responses = s.responses || [];
+    const container = document.getElementById('drawer-report-content');
+
+    const statHtml = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+        ${[['Guests',responses.length],['Coffees',coffees.length],['Responses',responses.length]].map(([l,v])=>`
+          <div style="background:rgba(232,228,217,0.06);border-radius:10px;padding:12px 14px">
+            <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;margin:0 0 4px">${l}</p>
+            <p style="font-size:1.3rem;font-weight:500;color:#e8e4d9;margin:0">${v}</p>
+          </div>`).join('')}
+      </div>`;
+
+    const tabsHtml = coffees.length ? `
+      <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;margin:0 0 10px">Flavour consensus</p>
+      <div id="report-coffee-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        ${coffees.map((cf,i)=>`
+          <button style="padding:6px 14px;border-radius:20px;border:1px solid ${i===0?'rgba(201,168,76,0.5)':'rgba(232,228,217,0.15)'};background:${i===0?'rgba(201,168,76,0.15)':'transparent'};color:${i===0?'#c9a84c':'#8faa8b'};font-size:0.8rem;cursor:pointer"
+            data-cidx="${i}" onclick="reportSwitchCoffee(${i},this)">${escHtml(cf.name)}</button>`).join('')}
+      </div>
+      <div style="position:relative;width:100%;height:200px;margin-bottom:20px">
+        <canvas id="report-bubble" role="img" aria-label="Bubble chart of flavour picks">Flavour frequency chart.</canvas>
+      </div>` : '';
+
+    const SCALE_FIELDS = [
+      { id:'body',       label:'Body',      options:['None','Light','Round','Full','Syrupy'] },
+      { id:'dry_aroma',  label:'Dry aroma', options:['Faint','Delicate','Moderate','Intense','Complex'] },
+      { id:'wet_aroma',  label:'Wet aroma', options:['Faint','Delicate','Moderate','Intense','Complex'] },
+      { id:'aftertaste', label:'Aftertaste',options:['Short','Medium','Long','Lingering'] },
+    ];
+
+    function scaleConsensus(coffeeIdx) {
+      const rows = SCALE_FIELDS.map(sf => {
+        const counts = {};
+        sf.options.forEach(o => counts[o] = 0);
+        responses.forEach(r => {
+          const val = r.coffees?.[coffeeIdx]?.data?.[sf.id];
+          if (val && counts[val] !== undefined) counts[val]++;
+        });
+        const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+        return { label:sf.label, top:top?.[0]||'—', count:top?.[1]||0, options:sf.options };
+      }).filter(r => r.count > 0);
+      if (!rows.length) return '<p style="font-size:0.82rem;color:#8faa8b;padding:8px 0">No sensory data yet.</p>';
+      return `
+        <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;margin:0 0 12px">Sensory consensus</p>
+        ${rows.map(r => {
+          const pct = Math.round((r.options.indexOf(r.top)+1) / r.options.length * 100);
+          return `
+            <div style="margin-bottom:14px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                <span style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.06em;text-transform:uppercase;color:#8faa8b">${r.label}</span>
+                <span style="font-size:0.82rem;color:#e8e4d9">${r.top} <span style="color:#8faa8b;font-size:0.75rem">(${r.count})</span></span>
+              </div>
+              <div style="height:4px;background:rgba(232,228,217,0.1);border-radius:2px">
+                <div style="height:4px;width:${pct}%;background:#c9a84c;border-radius:2px"></div>
+              </div>
+            </div>`;
+        }).join('')}`;
+    }
+
+    container.innerHTML = statHtml + tabsHtml + `<div id="report-scale-consensus">${scaleConsensus(0)}</div>`;
+    container._scaleConsensus = scaleConsensus;
+
+    if (coffees.length) {
+      setTimeout(() => buildBubbleChart(0), 150);
+    }
+  }
+
+  function reportSwitchCoffee(idx, btn) {
+    document.querySelectorAll('#report-coffee-tabs button').forEach((b,i) => {
+      b.style.borderColor = i===idx ? 'rgba(201,168,76,0.5)' : 'rgba(232,228,217,0.15)';
+      b.style.background  = i===idx ? 'rgba(201,168,76,0.15)' : 'transparent';
+      b.style.color       = i===idx ? '#c9a84c' : '#8faa8b';
+    });
+    buildBubbleChart(idx);
+    const sc = document.getElementById('drawer-report-content')._scaleConsensus;
+    if (sc) document.getElementById('report-scale-consensus').innerHTML = sc(idx);
+  }
+
+  function buildBubbleChart(coffeeIdx) {
+    const responses = currentSession?.responses || [];
+    const flavourCounts = {};
+    responses.forEach(r => {
+      (r.coffees?.[coffeeIdx]?.data?.flavours || []).forEach(f => {
+        flavourCounts[f] = (flavourCounts[f] || 0) + 1;
+      });
+    });
+    const entries = Object.entries(flavourCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const canvas = document.getElementById('report-bubble');
+    if (!canvas) return;
+    if (!entries.length) {
+      canvas.closest('div').innerHTML = '<p style="color:#8faa8b;font-size:0.85rem;text-align:center;padding:30px 0">No flavour data yet.</p>';
+      return;
+    }
+    const max = Math.max(...entries.map(e=>e[1]));
+    const pts = entries.map((e,i) => ({
+      x: 80 + (i%4)*130, y: 55 + Math.floor(i/4)*95,
+      r: 14 + (e[1]/max)*24, label:e[0], count:e[1],
+    }));
+    if (bubbleChartInst) { try { bubbleChartInst.destroy(); } catch(e){} bubbleChartInst = null; }
+    bubbleChartInst = new Chart(canvas, {
+      type:'bubble',
+      data:{ datasets:[{ data:pts, backgroundColor:'rgba(201,168,76,0.15)', borderColor:'#c9a84c', borderWidth:1.5 }] },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => `${pts[ctx.dataIndex]?.label} — ${pts[ctx.dataIndex]?.count} guests` }}},
+        scales:{ x:{display:false,min:0,max:600}, y:{display:false,min:0,max:280} },
+        layout:{padding:20},
+      },
+      plugins:[{
+        id:'labels', afterDraw(chart) {
+          const ctx = chart.ctx;
+          chart.data.datasets[0].data.forEach((_,i) => {
+            const meta = chart.getDatasetMeta(0).data[i];
+            if (!meta) return;
+            ctx.save();
+            ctx.fillStyle='#e8e4d9'; ctx.font='500 11px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText(pts[i]?.label||'', meta.x, meta.y-3);
+            ctx.fillStyle='#8faa8b'; ctx.font='10px system-ui';
+            ctx.fillText(`${pts[i]?.count||''} guests`, meta.x, meta.y+10);
+            ctx.restore();
+          });
+        }
+      }]
+    });
   }
 
   function closeDrawer() {
