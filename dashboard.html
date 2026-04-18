@@ -761,6 +761,7 @@
         </div>
         <div class="status-actions">
           <button class="status-btn start" onclick="startScheduledSession('${s.share_token}', '${s.id}', this)">Start</button>
+          <button class="status-btn cancel" onclick="showShareModal('${s.share_token}')">Share</button>
           <button class="status-btn cancel" style="color:var(--mid);border-color:var(--divider);background:transparent" onclick="editScheduledSession('${s.share_token}', '${s.id}', this)">Edit</button>
           <button class="status-btn cancel" onclick="cancelScheduledSession('${s.share_token}', '${s.id}', this)">Cancel</button>
         </div>
