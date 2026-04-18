@@ -615,11 +615,16 @@
         .eq('id', s.id)
         .eq('user_id', userId);
 
-      // If recurring, create next occurrence
+      // If recurring, keep bumping forward until next date is in the future
       if (s.recurrence === 'weekly' || s.recurrence === 'biweekly') {
-        const days   = s.recurrence === 'weekly' ? 7 : 14;
-        const next   = new Date(s.scheduled_at);
-        next.setDate(next.getDate() + days);
+        const days = s.recurrence === 'weekly' ? 7 : 14;
+        const next = new Date(s.scheduled_at);
+
+        // Keep adding intervals until the next date is in the future
+        while (next.toISOString().split('T')[0] <= today) {
+          next.setDate(next.getDate() + days);
+        }
+
         const newToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 
         await window.supabaseClient
