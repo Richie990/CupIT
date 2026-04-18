@@ -995,18 +995,21 @@
 
   // ── REPORT ──
   function buildReport() {
-    if (reportBuilt) return;
-    reportBuilt = true;
     const s = currentSession;
     if (!s) return;
+    reportBuilt = true;
 
     const coffees   = s.coffees || [];
     const responses = s.responses || [];
+
+    // Include host's own notes as a response for consensus purposes
+    const hostAsResponse = { coffees: coffees.map(c => ({ name: c.name, data: c.data || {} })) };
+    const allResponses = [hostAsResponse, ...responses];
     const container = document.getElementById('drawer-report-content');
 
     const statHtml = `
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
-        ${[['Guests',responses.length],['Coffees',coffees.length],['Responses',responses.length]].map(([l,v])=>`
+        ${[['Guests',responses.length],['Coffees',coffees.length],['Tasters',allResponses.length]].map(([l,v])=>`
           <div style="background:rgba(232,228,217,0.06);border-radius:10px;padding:12px 14px">
             <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;margin:0 0 4px">${l}</p>
             <p style="font-size:1.3rem;font-weight:500;color:#e8e4d9;margin:0">${v}</p>
@@ -1031,11 +1034,11 @@
       { id:'aftertaste', label:'Aftertaste',options:['Short','Medium','Long','Lingering'] },
     ];
 
-    function scaleConsensus(coffeeIdx) {
+    function scaleConsensus(coffeeIdx, rsp) {
       const rows = SCALE_FIELDS.map(sf => {
         const counts = {};
         sf.options.forEach(o => counts[o] = 0);
-        responses.forEach(r => {
+        rsp.forEach(r => {
           const val = r.coffees?.[coffeeIdx]?.data?.[sf.id];
           if (val && counts[val] !== undefined) counts[val]++;
         });
@@ -1060,8 +1063,9 @@
         }).join('')}`;
     }
 
-    container.innerHTML = statHtml + tabsHtml + `<div id="report-scale-consensus">${scaleConsensus(0)}</div>`;
-    container._scaleConsensus = scaleConsensus;
+    container.innerHTML = statHtml + tabsHtml + `<div id="report-scale-consensus">${scaleConsensus(0, allResponses)}</div>`;
+    container._scaleConsensus = (idx) => scaleConsensus(idx, allResponses);
+    container._allResponses = allResponses;
 
     if (coffees.length) {
       setTimeout(() => buildBubbleChart(0), 150);
@@ -1080,9 +1084,9 @@
   }
 
   function buildBubbleChart(coffeeIdx) {
-    const responses = currentSession?.responses || [];
+    const allResponses = document.getElementById('drawer-report-content')?._allResponses || [{ coffees: currentSession?.coffees || [] }];
     const flavourCounts = {};
-    responses.forEach(r => {
+    allResponses.forEach(r => {
       (r.coffees?.[coffeeIdx]?.data?.flavours || []).forEach(f => {
         flavourCounts[f] = (flavourCounts[f] || 0) + 1;
       });
