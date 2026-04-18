@@ -585,17 +585,22 @@
   //   select   → dropdown (options array required)
   //   flavours → the interactive flavour wheel picker
   //   textarea → multi-line free text
-  // ALL_PARAMS — sensory fields only. Metadata (origin, variety, process etc.)
-  // is captured per-coffee during setup, not here.
   const ALL_PARAMS = [
     // ── Default ON ──
-    { id:'flavours',  label:'Flavour Notes', type:'flavours' },
-    { id:'notes',     label:'Tasting Notes', type:'textarea', placeholder:'Free-form impressions...' },
+    { id:'origin',    label:'Origin',       type:'text',   placeholder:'e.g. Ethiopia, Yirgacheffe' },
+    { id:'variety',   label:'Variety',      type:'text',   placeholder:'e.g. Bourbon, Gesha, Typica' },
+    { id:'process',   label:'Process',      type:'select', options:['Washed','Natural','Honey','Anaerobic','Other'] },
+    { id:'roaster',   label:'Roaster',      type:'text',   placeholder:'Who roasted it?' },
+    { id:'producer',  label:'Producer',     type:'text',   placeholder:'Farm or producer name' },
+    { id:'flavours',  label:'Flavour Notes',type:'flavours' },
+    { id:'notes',     label:'Tasting Notes',type:'textarea',placeholder:'Free-form impressions...' },
     // ── Default OFF ──
-    { id:'body',      label:'Body',          type:'textarea', placeholder:'e.g. Silky, Syrupy, Full, Watery...' },
-    { id:'dry_aroma', label:'Dry Aroma',     type:'textarea', placeholder:'Aroma from dry grounds...' },
-    { id:'wet_aroma', label:'Wet Aroma',     type:'textarea', placeholder:'Aroma after adding water...' },
-    { id:'aftertaste',label:'Aftertaste',    type:'textarea', placeholder:'Finish length and quality...' },
+    { id:'roast',     label:'Roast Level',  type:'select', options:['Light','Medium-Light','Medium','Medium-Dark','Dark'] },
+    { id:'harvest',   label:'Harvest Year', type:'text',   placeholder:'e.g. 2024' },
+    { id:'body',      label:'Body',         type:'textarea',placeholder:'e.g. Silky, Syrupy, Full, Watery...' },
+    { id:'dry_aroma', label:'Dry Aroma',    type:'textarea',placeholder:'Aroma from dry grounds...' },
+    { id:'wet_aroma', label:'Wet Aroma',    type:'textarea',placeholder:'Aroma after adding water...' },
+    { id:'aftertaste',label:'Aftertaste',   type:'textarea',placeholder:'Finish length and quality...' },
   ];
 
   // WHEEL defines the flavour picker structure.
@@ -627,9 +632,9 @@
   let coffees = [];
 
   // activeParams tracks which fields the user toggled on in setup.
-  // Default ON: flavours, notes
-  // Default OFF: body, dry_aroma, wet_aroma, aftertaste
-  let activeParams = new Set(['flavours','notes']);
+  // Default ON: origin, variety, process, roaster, producer, flavours, notes
+  // Default OFF: roast, harvest, body, dry_aroma, wet_aroma, aftertaste
+  let activeParams = new Set(['origin','variety','process','roaster','producer','flavours','notes']);
 
 
   let currentView = 'setup'; // tracks which view is showing
