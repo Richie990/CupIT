@@ -670,12 +670,37 @@
         if (event === 'SIGNED_OUT') window.location.href = 'index.html';
       });
 
+      // Check for ?token= param first — host joining their own live session to cup
+      const urlToken = new URLSearchParams(window.location.search).get('token');
+      if (urlToken) {
+        const { data } = await window.supabaseClient
+          .from('cupping_sessions')
+          .select('session_name, coffees, params_active, timer_enabled, share_token, status')
+          .eq('share_token', urlToken)
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (data && data.status === 'active') {
+          shareToken   = data.share_token;
+          useTimer     = data.timer_enabled || false;
+          coffees      = (data.coffees || []).map(c => ({ name: c.name, meta: c.meta || {}, data: c.data || {} }));
+          activeParams = new Set(data.params_active || []);
+          document.getElementById('session-name').value = data.session_name || '';
+
+          buildParamGrid();
+          buildCuppingView();
+          document.getElementById('timer-widget').style.display = useTimer ? 'block' : 'none';
+          timerReset();
+          goTo('cupping');
+          return;
+        }
+      }
+
       // Check sessionStorage for a live host-manage session (handles F5 refresh)
       const saved = sessionStorage.getItem('cupit_host_manage');
       if (saved) {
         try {
           const state = JSON.parse(saved);
-          // Verify session is still active in DB before restoring
           const { data } = await window.supabaseClient
             .from('cupping_sessions')
             .select('status, session_name, coffees')
@@ -685,10 +710,9 @@
 
           if (data && data.status === 'active') {
             shareToken = state.shareToken;
-            // Restore minimal state needed for end session
             document.getElementById('session-name').value = data.session_name || '';
             buildParamGrid();
-            addCoffee(); addCoffee(); // keep coffees list valid
+            addCoffee(); addCoffee();
             goTo('host-manage');
             startGuestCountSubscription();
             return;
@@ -702,39 +726,6 @@
 
     } catch(e) {
       console.warn('Auth check failed, continuing anyway:', e.message);
-    }
-
-    // Check for ?token= param — host joining their own live session from dashboard
-    const urlToken = new URLSearchParams(window.location.search).get('token');
-    if (urlToken) {
-      try {
-        const { data: { session: authSession } } = await window.supabaseClient.auth.getSession();
-        if (authSession) {
-          const { data } = await window.supabaseClient
-            .from('cupping_sessions')
-            .select('session_name, coffees, params_active, timer_enabled, share_token, status')
-            .eq('share_token', urlToken)
-            .eq('user_id', authSession.user.id)
-            .single();
-
-          if (data && data.status === 'active') {
-            shareToken   = data.share_token;
-            useTimer     = data.timer_enabled || false;
-            coffees      = (data.coffees || []).map(c => ({ name: c.name, meta: c.meta || {}, data: c.data || {} }));
-            activeParams = new Set(data.params_active || []);
-            document.getElementById('session-name').value = data.session_name || '';
-
-            buildParamGrid();
-            buildCuppingView();
-            document.getElementById('timer-widget').style.display = useTimer ? 'block' : 'none';
-            timerReset();
-            goTo('cupping');
-            return;
-          }
-        }
-      } catch(e) {
-        console.warn('Token load failed:', e.message);
-      }
     }
 
     buildParamGrid();

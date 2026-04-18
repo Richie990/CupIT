@@ -481,6 +481,28 @@
 </main>
 
 
+<!-- ── START SESSION MODAL ── -->
+<div id="start-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,35,25,0.45);z-index:300;backdrop-filter:blur(4px)"></div>
+<div id="start-modal" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:301;background:#1a2319;border-radius:20px 20px 0 0;padding:28px 24px 48px;box-shadow:0 -8px 40px rgba(0,0,0,0.3)">
+  <div style="width:36px;height:4px;background:rgba(232,228,217,0.2);border-radius:2px;margin:0 auto 24px"></div>
+  <p style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:400;color:#e8e4d9;margin-bottom:4px">Starting <em>session</em></p>
+  <p style="font-size:0.82rem;color:#8faa8b;margin-bottom:28px;line-height:1.6">Are you cupping too, or just hosting?</p>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <button id="btn-start-and-cup"
+      style="width:100%;padding:14px;border-radius:50px;border:1px solid rgba(232,228,217,0.25);background:rgba(232,228,217,0.12);color:#e8e4d9;font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.2s"
+      onmouseover="this.style.background='rgba(232,228,217,0.2)'"
+      onmouseout="this.style.background='rgba(232,228,217,0.12)'">
+      Yes — take me to the cupping
+    </button>
+    <button id="btn-start-only"
+      style="width:100%;padding:14px;border-radius:50px;border:1.5px solid rgba(232,228,217,0.15);background:transparent;color:#8faa8b;font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.2s"
+      onmouseover="this.style.borderColor='rgba(232,228,217,0.35)';this.style.color='#e8e4d9'"
+      onmouseout="this.style.borderColor='rgba(232,228,217,0.15)';this.style.color='#8faa8b'">
+      No — just start for guests
+    </button>
+  </div>
+</div>
+
 <!-- ── SHARE MODAL ── -->
 <div id="share-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,35,25,0.45);z-index:300;backdrop-filter:blur(4px)" onclick="closeShareModal()"></div>
 <div id="share-modal" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:301;background:#1a2319;border-radius:20px 20px 0 0;padding:28px 24px 48px;box-shadow:0 -8px 40px rgba(0,0,0,0.3)">
@@ -720,7 +742,6 @@
             <p class="status-meta">${(s.coffees||[]).length} coffee${(s.coffees||[]).length!==1?'s':''} · Live now</p>
           </div>
           <div class="status-actions">
-            <button class="status-btn start" onclick="window.location.href='cupping.html?token=${s.share_token}'">Cup</button>
             <button class="status-btn cancel" onclick="showShareModal('${s.share_token}')">Share</button>
             <button class="status-btn end" onclick="endLiveSession('${s.share_token}', '${s.id}', this)">End session</button>
           </div>
@@ -769,7 +790,7 @@
       </div>`;
   }
 
-  // Starts a scheduled session from the dashboard — sets status to active
+  // Starts a scheduled session from the dashboard — shows "are you cupping?" modal
   async function startScheduledSession(shareToken, sessionId, btn) {
     btn.disabled = true;
     btn.textContent = 'Starting...';
@@ -789,9 +810,24 @@
       return;
     }
 
-    // Redirect to host-manage view on cupping page with the share token
-    sessionStorage.setItem('cupit_host_manage', JSON.stringify({ shareToken }));
-    window.location.href = 'cupping.html';
+    // Show "are you cupping?" modal
+    document.getElementById('start-modal-overlay').style.display = 'block';
+    document.getElementById('start-modal').style.display = 'block';
+
+    document.getElementById('btn-start-and-cup').onclick = () => {
+      closeStartModal();
+      window.location.href = `cupping.html?token=${shareToken}`;
+    };
+
+    document.getElementById('btn-start-only').onclick = () => {
+      closeStartModal();
+      loadRecentSessions(session.user.id);
+    };
+  }
+
+  function closeStartModal() {
+    document.getElementById('start-modal-overlay').style.display = 'none';
+    document.getElementById('start-modal').style.display = 'none';
   }
 
   // Cancels a scheduled session from the dashboard
