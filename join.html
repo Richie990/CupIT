@@ -332,18 +332,29 @@
     <p class="state-body">This link may be invalid or the session may have ended.</p>
   </div>
 
-  <!-- Session closed state -->
+  <!-- Scheduled — not started yet -->
+  <div class="state-card" id="state-scheduled" style="display:none">
+    <span class="state-icon">🕐</span>
+    <h2 class="state-title">Not started <em>yet</em></h2>
+    <p class="state-body" id="state-scheduled-msg">The host hasn't started this session yet. Check back soon.</p>
+    <p style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-top:16px">Session</p>
+    <p style="font-size:0.9rem;font-weight:500;color:var(--brown);margin-top:4px" id="state-scheduled-name"></p>
+  </div>
+
+  <!-- Session ended -->
   <div class="state-card" id="state-closed" style="display:none">
     <span class="state-icon">🔒</span>
-    <h2 class="state-title">Session ended</h2>
+    <h2 class="state-title">Session <em>ended</em></h2>
     <p class="state-body">The host has closed this cupping session. No further responses can be submitted.</p>
+    <p style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-top:16px">Session</p>
+    <p style="font-size:0.9rem;font-weight:500;color:var(--brown);margin-top:4px" id="state-closed-name"></p>
   </div>
 
   <!-- Already submitted state -->
   <div class="state-card" id="state-submitted" style="display:none">
     <span class="state-icon">✅</span>
-    <h2 class="state-title">Already submitted</h2>
-    <p class="state-body">You've already submitted your notes for this session.</p>
+    <h2 class="state-title">Already <em>submitted</em></h2>
+    <p class="state-body">You've already submitted your notes for this session. Thanks for cupping!</p>
   </div>
 
   <!-- Thank you state -->
@@ -446,16 +457,18 @@
       // Check session status
       if (data.status === 'scheduled') {
         document.getElementById('state-loading').style.display = 'none';
-        document.getElementById('state-closed').style.display = 'block';
+        document.getElementById('state-scheduled').style.display = 'block';
         document.getElementById('header-title').innerHTML = 'Session <em>not started yet</em>';
-        let scheduledMsg = "The host hasn't started this session yet.";
+        document.getElementById('state-scheduled-name').textContent = data.session_name || 'Untitled session';
+        let scheduledMsg = "The host hasn't started this session yet. Check back soon.";
         if (data.scheduled_at) {
           const d = new Date(data.scheduled_at);
           const dateStr = d.toLocaleDateString('en-IE', { weekday:'long', day:'numeric', month:'long' });
           const hasTime = data.scheduled_at.includes('T') && !data.scheduled_at.endsWith('T00:00:00.000Z') && d.getUTCHours() !== 0;
           const timeStr = hasTime ? ' at ' + d.toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' }) : '';
-          scheduledMsg = `This session is scheduled for ${dateStr}${timeStr}. Check back then.`;
+          scheduledMsg = `Scheduled for ${dateStr}${timeStr}. Check back then.`;
         }
+        document.getElementById('state-scheduled-msg').textContent = scheduledMsg;
         document.getElementById('header-sub').textContent = scheduledMsg;
         return;
       }
@@ -464,6 +477,8 @@
         document.getElementById('state-closed').style.display = 'block';
         document.getElementById('header-title').innerHTML = 'Session <em>ended</em>';
         document.getElementById('header-sub').textContent = 'This session is no longer accepting responses';
+        const closedName = document.getElementById('state-closed-name');
+        if (closedName) closedName.textContent = data.session_name || 'Untitled session';
         return;
       }
 
