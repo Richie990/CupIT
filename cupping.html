@@ -1063,6 +1063,16 @@
     document.querySelectorAll('.coffee-panel').forEach((p,j) => p.classList.toggle('active', j===i));
   }
 
+  // Handles scale pill selection — reads data attributes, updates state, toggles active class.
+  function saveScaleField(btn) {
+    const ci  = parseInt(btn.dataset.ci);
+    const key = btn.dataset.field;
+    const val = btn.dataset.val;
+    coffees[ci].data[key] = val;
+    btn.closest('.scale-pill-group').querySelectorAll('.scale-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
   // Stores a plain field value (text, select, textarea) on the coffee object.
   function savefield(ci, field, val) {
     coffees[ci].data[field] = val;
