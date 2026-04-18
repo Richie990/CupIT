@@ -654,6 +654,9 @@
       .from('cupping_sessions')
       .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status, blind, scheduled_at, recurrence')
       .eq('user_id', userId)
+      .neq('status', 'cancelled')
+      .neq('status', 'scheduled')
+      .eq('missed', false)
       .order('id', { ascending: false });
 
     if (error) {
