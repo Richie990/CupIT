@@ -370,7 +370,7 @@
   // If already logged in, go straight to dashboard
   (async () => {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
-    if (session) window.location.href = 'dashboard.html';
+    if (session) { const ret = sessionStorage.getItem('cupit_join_return'); window.location.href = ret || 'dashboard.html'; }
   })();
 
   track('page_view', { page: 'login' });
@@ -454,6 +454,8 @@
 
       track('login_success', { method: 'password' });
       // Redirect to dashboard on success
+      const joinReturn = sessionStorage.getItem('cupit_join_return');
+      if (joinReturn) { sessionStorage.removeItem('cupit_join_return'); window.location.href = joinReturn; return; }
       window.location.href = 'dashboard.html';
 
     } catch (err) {

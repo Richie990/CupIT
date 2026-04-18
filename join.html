@@ -353,15 +353,36 @@
     <p class="state-body">Your tasting notes have been saved. Thanks for cupping!</p>
   </div>
 
-  <!-- Name step -->
+  <!-- Identity step — choose login or anonymous -->
   <div class="name-card" id="step-name" style="display:none">
-    <h2>What's your name?</h2>
-    <p>So the session host knows whose notes are whose.</p>
-    <div class="form-group">
-      <label class="form-label" for="guest-name">Your name</label>
-      <input type="text" id="guest-name" class="form-input" placeholder="e.g. Sarah" autocomplete="given-name" />
+    <h2>Join <em>session</em></h2>
+    <p>Log in to link your notes to your account, or join anonymously.</p>
+
+    <!-- Logged in state — shown if already authenticated -->
+    <div id="identity-loggedin" style="display:none">
+      <div style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(201,168,76,0.08);border:1.5px solid rgba(201,168,76,0.2);border-radius:12px;margin-bottom:16px">
+        <div style="width:36px;height:36px;border-radius:50%;background:rgba(201,168,76,0.15);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:#c9a84c;flex-shrink:0" id="identity-avatar">R</div>
+        <div>
+          <p style="font-size:0.9rem;font-weight:500;color:var(--brown);margin:0" id="identity-name">Loading...</p>
+          <p style="font-size:0.75rem;color:var(--mid);margin:2px 0 0;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em">CupIT member</p>
+        </div>
+      </div>
+      <button class="btn-coffee-nav primary" style="width:100%;margin-bottom:10px" onclick="startCuppingLoggedIn()">Join as myself →</button>
+      <button class="btn-coffee-nav" style="width:100%" onclick="showAnonymousForm()">Join anonymously instead</button>
     </div>
-    <button class="btn-coffee-nav primary" style="width:100%" onclick="startCupping()">Start cupping →</button>
+
+    <!-- Anonymous form — shown if not logged in or chose anonymous -->
+    <div id="identity-anonymous">
+      <div class="form-group">
+        <label class="form-label" for="guest-name">Your name</label>
+        <input type="text" id="guest-name" class="form-input" placeholder="e.g. Sarah" autocomplete="given-name" />
+      </div>
+      <button class="btn-coffee-nav primary" style="width:100%;margin-bottom:10px" onclick="startCupping()">Start cupping →</button>
+      <div id="login-option" style="text-align:center">
+        <p style="font-size:0.8rem;color:var(--mid);margin-bottom:8px">Have a CupIT account?</p>
+        <a href="#" onclick="loginAndReturn()" style="font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);text-decoration:none">Log in to link your notes →</a>
+      </div>
+    </div>
   </div>
 
   <!-- Cupping step -->
@@ -381,6 +402,7 @@
   // ── STATE ──
   let sessionData    = null;  // full session row from Supabase
   let guestName      = '';
+  let guestUserId    = null;  // set if guest is logged in to CupIT
   let currentCoffee  = 0;
   let guestCoffees   = [];    // array of { name, data: {} } matching host's coffees
   let flavourPicks   = [];    // per-coffee flavour selections: array of arrays
@@ -461,6 +483,25 @@
       document.getElementById('state-loading').style.display = 'none';
       document.getElementById('step-name').style.display = 'block';
 
+      // Check if user is already logged in to CupIT
+      const { data: { session: authSession } } = await window.supabaseClient.auth.getSession();
+      if (authSession) {
+        const { data: profile } = await window.supabaseClient
+          .from('profiles')
+          .select('name')
+          .eq('user_id', authSession.user.id)
+          .single();
+
+        if (profile?.name) {
+          guestUserId = authSession.user.id;
+          guestName   = profile.name;
+          document.getElementById('identity-name').textContent   = profile.name;
+          document.getElementById('identity-avatar').textContent = profile.name.charAt(0).toUpperCase();
+          document.getElementById('identity-loggedin').style.display  = 'block';
+          document.getElementById('identity-anonymous').style.display = 'none';
+        }
+      }
+
     } catch(e) {
       console.error(e);
       showError();
@@ -473,6 +514,26 @@
   }
 
   // ── NAME STEP ──
+  function startCuppingLoggedIn() {
+    // Use logged-in user's name and id
+    buildCuppingView();
+    document.getElementById('step-name').style.display = 'none';
+    document.getElementById('step-cupping').style.display = 'block';
+    updateNav();
+  }
+
+  function loginAndReturn() {
+    // Store current URL so login can redirect back
+    sessionStorage.setItem('cupit_join_return', window.location.href);
+    window.location.href = 'login.html';
+  }
+
+  function showAnonymousForm() {
+    guestUserId = null;
+    document.getElementById('identity-loggedin').style.display  = 'none';
+    document.getElementById('identity-anonymous').style.display = 'block';
+  }
+
   function startCupping() {
     const name = document.getElementById('guest-name').value.trim();
     if (!name) {
@@ -715,6 +776,7 @@
           share_token: sessionData.token,
           guest_name:  guestName,
           coffees:     guestCoffees,
+          user_id:     guestUserId || null,
         });
 
       if (error) {
