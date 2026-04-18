@@ -648,11 +648,12 @@
     };
     Object.entries(SCALE_FIELDS).forEach(([id, field]) => {
       if (params.has(id)) {
+        const pillHtml = field.options.map(o =>
+          `<button type="button" class="guest-scale-pill" data-group="${id}-${idx}" data-val="${o}" onclick="selectScalePill(this)">${o}</button>`
+        ).join('');
         html += `<div class="form-group">
           <label class="form-label">${field.label}</label>
-          <div class="scale-pill-group" id="${id}-${idx}" data-field="${id}" data-idx="${idx}">
-            ${field.options.map(o => `<button type="button" class="guest-scale-pill" onclick="selectScalePill(this,'${id}-${idx}','${id}',${idx},'${o}')">${o}</button>`).join('')}
-          </div>
+          <div class="scale-pill-group" id="${id}-${idx}">${pillHtml}</div>
         </div>`;
       }
     });
@@ -688,7 +689,8 @@
   }
 
   // Scale pill selection for guests
-  function selectScalePill(btn, groupId, fieldId, idx, val) {
+  function selectScalePill(btn) {
+    const groupId = btn.dataset.group;
     document.querySelectorAll(`#${groupId} .guest-scale-pill`).forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   }

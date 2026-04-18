@@ -598,17 +598,11 @@
   //   flavours → the interactive flavour wheel picker
   //   textarea → multi-line free text
   const ALL_PARAMS = [
+    // ── Sensory params only — metadata (origin, variety etc.) is set per-coffee at setup ──
     // ── Default ON ──
-    { id:'origin',    label:'Origin',       type:'text',   placeholder:'e.g. Ethiopia, Yirgacheffe' },
-    { id:'variety',   label:'Variety',      type:'text',   placeholder:'e.g. Bourbon, Gesha, Typica' },
-    { id:'process',   label:'Process',      type:'select', options:['Washed','Natural','Honey','Anaerobic','Other'] },
-    { id:'roaster',   label:'Roaster',      type:'text',   placeholder:'Who roasted it?' },
-    { id:'producer',  label:'Producer',     type:'text',   placeholder:'Farm or producer name' },
     { id:'flavours',  label:'Flavour Notes',type:'flavours' },
     { id:'notes',     label:'Tasting Notes',type:'textarea',placeholder:'Free-form impressions...' },
     // ── Default OFF ──
-    { id:'roast',     label:'Roast Level',  type:'select', options:['Light','Medium-Light','Medium','Medium-Dark','Dark'] },
-    { id:'harvest',   label:'Harvest Year', type:'text',   placeholder:'e.g. 2024' },
     { id:'body',      label:'Body',         type:'scale', options:['None','Light','Round','Full','Syrupy'] },
     { id:'dry_aroma', label:'Dry Aroma',    type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
     { id:'wet_aroma', label:'Wet Aroma',    type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
@@ -644,9 +638,9 @@
   let coffees = [];
 
   // activeParams tracks which fields the user toggled on in setup.
-  // Default ON: origin, variety, process, roaster, producer, flavours, notes
-  // Default OFF: roast, harvest, body, dry_aroma, wet_aroma, aftertaste
-  let activeParams = new Set(['origin','variety','process','roaster','producer','flavours','notes']);
+  // Default ON: flavours, notes
+  // Default OFF: body, dry_aroma, wet_aroma, aftertaste
+  let activeParams = new Set(['flavours','notes']);
 
 
   let currentView = 'setup'; // tracks which view is showing
@@ -974,13 +968,15 @@
         if (p.type === 'flavours') return buildFlavourPicker(ci);
         if (p.type === 'scale') {
           const val = coffees[ci].data[p.id] || '';
+          const pillId = `scale-${ci}-${p.id}`;
           return `
             <div class="section-card">
               <p class="section-card-title">${p.label}</p>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                ${p.options.map(o => `
-                  <button class="scale-pill${val===o?' active':''}"
-                    onclick="saveScaleField(${ci},'${p.id}','${o}',this)">${o}</button>`).join('')}
+              <div id="${pillId}" class="scale-pill-group" style="display:flex;gap:8px;flex-wrap:wrap">
+                ${p.options.map(o => {
+                  const active = val === o ? ' active' : '';
+                  return `<button class="scale-pill${active}" data-ci="${ci}" data-field="${p.id}" data-val="${o}" onclick="saveScaleField(this)">${o}</button>`;
+                }).join('')}
               </div>
             </div>`;
         }
