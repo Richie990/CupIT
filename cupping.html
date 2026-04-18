@@ -1216,7 +1216,8 @@
     let error;
 
     if (shareToken) {
-      // Fetch original params_active so we preserve metadata fields
+      // Host joined an active session to cup — save their notes only, don't touch session status
+      // Session stays active so guests can still cup. Host ends it from dashboard.
       const { data: orig } = await window.supabaseClient
         .from('cupping_sessions')
         .select('params_active')
@@ -1226,15 +1227,8 @@
       ({ error } = await window.supabaseClient
         .from('cupping_sessions')
         .update({
-          session_name:  name,
           coffees:       coffees.map(c => ({ name: c.name, meta: c.meta || {}, data: c.data || {} })),
           params_active: orig?.params_active || [...activeParams],
-          timer_enabled: useTimer,
-          is_active:     false,
-          status:        'ended',
-          blind:         blindCupping,
-          scheduled_at:  scheduledAt || null,
-          recurrence:    recurrence,
         })
         .eq('share_token', shareToken)
         .eq('user_id', session.user.id));
@@ -1264,9 +1258,14 @@
       return;
     }
 
-    document.getElementById('saved-sub').textContent =
-      `"${name}" with ${coffees.length} coffee${coffees.length>1?'s':''} has been saved to your journal.`;
-    goTo('saved');
+    if (shareToken) {
+      // Host finished cupping — go back to dashboard to manage the session
+      window.location.href = 'dashboard.html';
+    } else {
+      document.getElementById('saved-sub').textContent =
+        `"${name}" with ${coffees.length} coffee${coffees.length>1?'s':''} has been saved to your journal.`;
+      goTo('saved');
+    }
   }
 
   // Creates the session with share token and redirects to dashboard
