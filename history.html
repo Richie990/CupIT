@@ -290,50 +290,55 @@
     }
     .drawer-overlay.open { opacity: 1; pointer-events: all; }
 
-    /* Drawer panel slides in from the right */
+    /* Drawer panel slides up from bottom */
     .drawer {
-      position: fixed; top: 0; right: 0; bottom: 0; z-index: 301;
-      width: 100%; max-width: 480px;
-      background: var(--paper);
-      box-shadow: -8px 0 40px rgba(26,35,25,0.2);
-      transform: translateX(100%);
+      position: fixed; bottom: 0; left: 50%; z-index: 301;
+      transform: translateX(-50%) translateY(100%);
+      width: 100%; max-width: 600px;
+      background: #1a2319;
+      box-shadow: 0 -8px 40px rgba(0,0,0,0.3);
+      border-radius: 20px 20px 0 0;
       transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
       overflow-y: auto;
+      max-height: 85vh;
       display: flex; flex-direction: column;
     }
-    .drawer.open { transform: translateX(0); }
+    .drawer.open { transform: translateX(-50%) translateY(0); }
 
+    .drawer-handle {
+      width: 36px; height: 4px; background: rgba(232,228,217,0.2);
+      border-radius: 2px; margin: 14px auto 0; flex-shrink: 0;
+    }
     .drawer-header {
-      position: sticky; top: 0; z-index: 10;
-      background: var(--dark);
-      padding: 18px 20px;
+      padding: 16px 20px 14px;
       display: flex; align-items: flex-start; justify-content: space-between;
-      gap: 12px;
+      gap: 12px; flex-shrink: 0;
     }
     .drawer-title {
       font-family: 'Playfair Display', serif;
-      font-size: 1.2rem; font-weight: 600;
-      color: var(--cream); line-height: 1.25;
+      font-size: 1.15rem; font-weight: 400;
+      color: #e8e4d9; line-height: 1.25;
     }
+    .drawer-title em { font-style: italic; }
     .drawer-meta {
-      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
       letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--light); margin-top: 4px;
+      color: #8faa8b; margin-top: 4px;
     }
     .drawer-close {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: rgba(255,255,255,0.1); border: none;
-      color: var(--light); font-size: 1rem; cursor: pointer;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(232,228,217,0.1); border: none;
+      color: #8faa8b; font-size: 0.9rem; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; transition: background 0.2s; margin-top: 2px;
+      flex-shrink: 0; transition: background 0.2s;
     }
-    .drawer-close:hover { background: rgba(255,255,255,0.2); }
+    .drawer-close:hover { background: rgba(232,228,217,0.2); color: #e8e4d9; }
 
-    .drawer-body { padding: 20px; flex: 1; }
+    .drawer-body { padding: 0 20px 16px; flex: 1; overflow-y: auto; }
 
     /* Collapsible guest rows */
     .guest-row {
-      border: 1px solid var(--divider);
+      border: 1px solid rgba(232,228,217,0.12);
       border-radius: 12px; margin-bottom: 8px; overflow: hidden;
     }
     .guest-row-header {
@@ -596,6 +601,7 @@
 
 <!-- ── DETAIL DRAWER ── -->
 <div class="drawer" id="drawer">
+  <div class="drawer-handle"></div>
   <div class="drawer-header">
     <div>
       <p class="drawer-title" id="drawer-title"></p>
