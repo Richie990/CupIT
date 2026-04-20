@@ -823,7 +823,9 @@
       guestCoffees[i].data = data;
     }
 
-    const btn = document.getElementById('btn-submit');
+    // DEBUG — remove after testing
+    alert(JSON.stringify(guestCoffees, null, 2));
+    return;
     btn.disabled = true;
     btn.textContent = 'Saving...';
 
