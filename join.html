@@ -917,8 +917,9 @@
     document.getElementById('state-results').style.display = 'block';
     document.querySelector('.page-header h1').innerHTML = 'Session <em>results</em>';
     resultsIsBlind = sessionData.blind === true;
+    if (resultsIsEnded) setResultsStatus(true);
     await fetchAndRenderResults();
-    subscribeToResults();
+    if (!resultsIsEnded) subscribeToResults();
   }
 
   async function fetchAndRenderResults() {
