@@ -842,6 +842,7 @@
         return;
       }
 
+      console.log('Inserting coffees:', JSON.stringify(guestCoffees));
       const { error } = await window.supabaseClient
         .from('session_responses')
         .insert({
@@ -850,6 +851,7 @@
           coffees:     guestCoffees,
           user_id:     guestUserId || null,
         });
+      console.log('Insert error:', error);
 
       if (error) {
         console.error('Error submitting:', error.message);
