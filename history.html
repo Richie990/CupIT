@@ -155,7 +155,7 @@
       background: var(--dark); color: var(--cream);
       font-family: 'DM Mono', monospace; font-size: 0.6rem;
       letter-spacing: 0.1em; text-transform: uppercase;
-      padding: 10px 18px; border-radius: 50px; border: none;
+      padding: 12px 24px; border-radius: 50px; border: none;
       cursor: pointer; transition: background 0.2s; text-decoration: none;
       white-space: nowrap;
     }
@@ -1063,13 +1063,15 @@
         }).join('')}`;
     }
 
-    // ── Radar chart — only show if 2+ coffees and scale data exists ──
+    // ── Radar chart — only show if 2+ coffees ──
     const radarHtml = coffees.length > 1 ? `
-      <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;margin:0 0 10px">Coffee comparison</p>
-      <div style="position:relative;width:100%;height:240px;margin-bottom:12px">
-        <canvas id="report-radar" role="img" aria-label="Radar chart comparing coffees">Coffee comparison radar chart.</canvas>
-      </div>
-      <div id="report-radar-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;font-size:0.78rem;color:#8faa8b"></div>` : '';
+      <div style="background:#1a2319;border-radius:16px;padding:20px;margin-top:4px">
+        <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;margin:0 0 14px">Coffee comparison</p>
+        <div style="position:relative;width:100%;height:240px;margin-bottom:14px">
+          <canvas id="report-radar" role="img" aria-label="Radar chart comparing coffees">Coffee comparison radar chart.</canvas>
+        </div>
+        <div id="report-radar-legend" style="display:flex;flex-wrap:wrap;gap:14px;font-size:0.78rem;color:#8faa8b"></div>
+      </div>` : '';
 
     container.innerHTML = statHtml + tabsHtml + `<div id="report-scale-consensus">${scaleConsensus(0, allResponses)}</div>` + radarHtml;
     container._scaleConsensus = (idx) => scaleConsensus(idx, allResponses);
