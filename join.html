@@ -708,7 +708,7 @@
     return html;
   }
 
-  // Scale pill selection for guests — stores in scalePicks state
+  // Scale pill selection — saves directly to guestCoffees like host does
   function selectScalePill(btn) {
     const groupId  = btn.dataset.group;
     const lastDash  = groupId.lastIndexOf('-');
@@ -716,7 +716,9 @@
     const fieldId   = groupId.slice(0, lastDash);
     document.querySelectorAll(`#${groupId} .guest-scale-pill`).forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    if (scalePicks[coffeeIdx] !== undefined) scalePicks[coffeeIdx][fieldId] = btn.dataset.val;
+    if (!guestCoffees[coffeeIdx]) return;
+    if (!guestCoffees[coffeeIdx].data) guestCoffees[coffeeIdx].data = {};
+    guestCoffees[coffeeIdx].data[fieldId] = btn.dataset.val;
   }
 
   // ── FLAVOUR WHEEL ──
@@ -775,22 +777,19 @@
     document.getElementById('btn-submit').classList.toggle('visible', currentCoffee === total - 1);
   }
 
-  // Reads current panel data into guestCoffees state
+  // Saves notes and flavours for current coffee — scale data is already stored on pill tap
   function saveCurrentCoffeeData() {
     const idx    = currentCoffee;
     const params = new Set(sessionData.params_active || []);
-    const data   = {};
+    if (!guestCoffees[idx].data) guestCoffees[idx].data = {};
 
     if (params.has('flavours')) {
-      data.flavours = [...flavourPicks[idx]];
+      guestCoffees[idx].data.flavours = [...flavourPicks[idx]];
     }
-
     if (params.has('notes')) {
       const el = document.getElementById(`notes-${idx}`);
-      if (el) data.notes = el.value.trim();
+      if (el) guestCoffees[idx].data.notes = el.value.trim();
     }
-
-    guestCoffees[idx].data = data;
   }
 
   // ── SUBMIT ──
@@ -799,28 +798,19 @@
     const total = sessionData.coffees.length;
     for (let i = 0; i < total; i++) {
       const params = new Set(sessionData.params_active || []);
-      const data   = {};
+      if (!guestCoffees[i].data) guestCoffees[i].data = {};
 
-      // Host-only fields — not collected from guests
-      const HOST_ONLY = new Set(['origin','variety','producer','roaster','harvest','process','roast']);
-
-      // Scale fields — read from scalePicks state
-      ['body','dry_aroma','wet_aroma','aftertaste'].forEach(k => {
-        if (params.has(k) && scalePicks[i]?.[k]) {
-          data[k] = scalePicks[i][k];
-        }
-      });
-      // Tasting notes — free text
+      // Notes — read from textarea
       if (params.has('notes')) {
         const el = document.getElementById(`notes-${i}`);
-        if (el && el.value.trim()) data['notes'] = el.value.trim();
+        if (el && el.value.trim()) guestCoffees[i].data['notes'] = el.value.trim();
       }
 
+      // Flavours — read from state
       if (params.has('flavours')) {
-        data.flavours = [...flavourPicks[i]];
+        guestCoffees[i].data.flavours = [...flavourPicks[i]];
       }
-
-      guestCoffees[i].data = data;
+      // Scale fields are already stored in guestCoffees[i].data via selectScalePill
     }
 
     const btn = document.getElementById('btn-submit');
@@ -928,12 +918,7 @@
       ? [{ coffees: coffees.map(c => ({ name: c.name, data: c.data || {} })) }]
       : [];
 
-    // Filter out empty responses (legacy rows with no data)
-    const validResponses = (responses || []).filter(r =>
-      r.coffees?.some(c => c.data && Object.keys(c.data).length > 0)
-    );
-
-    const allResponses = [...hostAsResp, ...validResponses];
+    const allResponses = [...hostAsResp, ...(responses || [])];
 
     buildResultsCarousel(coffees, allResponses, ended, session.blind);
   }
