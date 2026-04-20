@@ -60,7 +60,7 @@
       pointer-events: none; z-index: 999; opacity: 0.5;
     }
 
-    /* ── NAV ── */
+        /* ── NAV ── */
     nav {
       background: var(--dark);
       padding: 18px 24px;
@@ -71,13 +71,27 @@
       font-size: 1.05rem; color: var(--light); text-decoration: none;
     }
     .nav-logo em { font-style: italic; color: var(--accent); }
-    .nav-back {
+    .nav-links { display: flex; align-items: center; gap: 20px; list-style: none; margin: 0; padding: 0; }
+    .nav-link {
       font-family: 'DM Mono', monospace; font-size: 0.6rem;
       letter-spacing: 0.1em; text-transform: uppercase;
-      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
+      color: rgba(232,228,217,0.7); text-decoration: none;
+      transition: color 0.2s; white-space: nowrap;
     }
-    .nav-back:hover { color: var(--light); }
-
+    .nav-link:hover { color: var(--cream); }
+    .nav-cta {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      background: var(--cream); color: var(--dark);
+      padding: 8px 16px; border-radius: 50px; text-decoration: none;
+      transition: background 0.2s; white-space: nowrap;
+    }
+    .nav-cta:hover { background: #fff; }
+    @media (max-width: 560px) {
+      .nav-links { gap: 12px; }
+      .nav-link { font-size: 0.5rem; letter-spacing: 0.06em; }
+    }
+    
     /* ── DARK HEADER ── */
     .page-header {
       background: var(--dark);
