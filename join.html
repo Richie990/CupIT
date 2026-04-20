@@ -877,7 +877,6 @@
   let resultsCurrentIdx = 0;
   let resultsSub = null;
   let resultsSessionSub = null;
-  let resultsPoller = null;
   let resultsCharts = {};
   let resultsIsEnded = false;
 
@@ -897,15 +896,13 @@
   }
 
   async function fetchAndRenderResults() {
-    console.log('[Results] Fetching results...');
     const { data: session } = await window.supabaseClient
       .from('cupping_sessions')
       .select('coffees, status, blind')
       .eq('share_token', sessionData.token)
       .single();
 
-    if (!session) { console.log('[Results] No session found'); return; }
-    console.log('[Results] Session status:', session.status);
+    if (!session) return;
 
     const ended = session.status === 'ended';
     if (ended && !resultsIsEnded) {
@@ -919,11 +916,15 @@
       .select('coffees')
       .eq('share_token', sessionData.token);
 
-    console.log('[Results] Responses found:', responses?.length || 0);
 
     const coffees = session.coffees || [];
-    const hostAsResp = { coffees: coffees.map(c => ({ name: c.name, data: c.data || {} })) };
-    const allResponses = [hostAsResp, ...(responses || [])];
+
+    // Include host as a response if they actually cupped (have sensory data)
+    const hostCuppedAny = coffees.some(c => c.data && Object.keys(c.data).length > 0);
+    const hostAsResp = hostCuppedAny
+      ? [{ coffees: coffees.map(c => ({ name: c.name, data: c.data || {} })) }]
+      : [];
+    const allResponses = [...hostAsResp, ...(responses || [])];
 
     buildResultsCarousel(coffees, allResponses, ended, session.blind);
   }
@@ -953,7 +954,7 @@
 
       return `<div class="results-card">
         <div class="results-coffee-card">
-          <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin:0 0 4px">${tasterCount} taster${tasterCount!==1?'s':''}</p>
+          <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin:0 0 4px">${tasterCount} response${tasterCount!==1?'s':''}</p>
           <p style="font-size:1rem;font-weight:500;color:var(--brown);margin:0 0 16px">${displayName}</p>
           ${hasData ? `
             <div style="position:relative;width:100%;height:200px;margin-bottom:16px">
@@ -1086,17 +1087,12 @@
       })
       .subscribe();
 
-    // Polling fallback every 8 seconds in case realtime doesn't fire
-    resultsPoller = setInterval(async () => {
-      if (resultsIsEnded) { stopResultsSubs(); return; }
-      await fetchAndRenderResults();
-    }, 8000);
+
   }
 
   function stopResultsSubs() {
     if (resultsSub)        { window.supabaseClient.removeChannel(resultsSub);        resultsSub = null; }
     if (resultsSessionSub) { window.supabaseClient.removeChannel(resultsSessionSub); resultsSessionSub = null; }
-    if (resultsPoller)     { clearInterval(resultsPoller); resultsPoller = null; }
   }
 
   function escHtml(s) {
