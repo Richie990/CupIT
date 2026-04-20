@@ -1039,30 +1039,24 @@
   }
 
   function subscribeToResults() {
-    console.log('[Results] Starting subscriptions for token:', sessionData.token);
+    if (resultsIsEnded) return;
 
-    // Subscribe to new responses
+    // Realtime — new responses
     resultsSub = window.supabaseClient
       .channel('results-responses')
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'session_responses',
         filter: `share_token=eq.${sessionData.token}`,
-      }, (payload) => {
-        console.log('[Results] Response change detected:', payload);
-        fetchAndRenderResults();
-      })
-      .subscribe((status) => {
-        console.log('[Results] session_responses subscription status:', status);
-      });
+      }, () => fetchAndRenderResults())
+      .subscribe();
 
-    // Subscribe to session status changes
+    // Realtime — session status change
     resultsSessionSub = window.supabaseClient
       .channel('results-session')
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'cupping_sessions',
         filter: `share_token=eq.${sessionData.token}`,
       }, payload => {
-        console.log('[Results] Session change detected:', payload);
         if (payload.new?.status === 'ended') {
           resultsIsEnded = true;
           stopResultsSubs();
@@ -1070,9 +1064,13 @@
           fetchAndRenderResults();
         }
       })
-      .subscribe((status) => {
-        console.log('[Results] cupping_sessions subscription status:', status);
-      });
+      .subscribe();
+
+    // Polling fallback every 8 seconds in case realtime doesn't fire
+    resultsPoller = setInterval(async () => {
+      if (resultsIsEnded) { stopResultsSubs(); return; }
+      await fetchAndRenderResults();
+    }, 8000);
   }
 
   function stopResultsSubs() {
