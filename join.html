@@ -842,16 +842,14 @@
         return;
       }
 
-      console.log('Inserting coffees:', JSON.stringify(guestCoffees));
       const { error } = await window.supabaseClient
         .from('session_responses')
         .insert({
           share_token: sessionData.token,
           guest_name:  guestName,
-          coffees:     guestCoffees,
+          coffees:     JSON.parse(JSON.stringify(guestCoffees)),
           user_id:     guestUserId || null,
         });
-      console.log('Insert error:', error);
 
       if (error) {
         console.error('Error submitting:', error.message);
@@ -929,7 +927,13 @@
     const hostAsResp = hostCuppedAny
       ? [{ coffees: coffees.map(c => ({ name: c.name, data: c.data || {} })) }]
       : [];
-    const allResponses = [...hostAsResp, ...(responses || [])];
+
+    // Filter out empty responses (legacy rows with no data)
+    const validResponses = (responses || []).filter(r =>
+      r.coffees?.some(c => c.data && Object.keys(c.data).length > 0)
+    );
+
+    const allResponses = [...hostAsResp, ...validResponses];
 
     buildResultsCarousel(coffees, allResponses, ended, session.blind);
   }
