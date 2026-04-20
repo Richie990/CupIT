@@ -1063,12 +1063,23 @@
         }).join('')}`;
     }
 
-    container.innerHTML = statHtml + tabsHtml + `<div id="report-scale-consensus">${scaleConsensus(0, allResponses)}</div>`;
+    // ── Radar chart — only show if 2+ coffees and scale data exists ──
+    const radarHtml = coffees.length > 1 ? `
+      <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:#8faa8b;margin:0 0 10px">Coffee comparison</p>
+      <div style="position:relative;width:100%;height:240px;margin-bottom:12px">
+        <canvas id="report-radar" role="img" aria-label="Radar chart comparing coffees">Coffee comparison radar chart.</canvas>
+      </div>
+      <div id="report-radar-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;font-size:0.78rem;color:#8faa8b"></div>` : '';
+
+    container.innerHTML = statHtml + tabsHtml + `<div id="report-scale-consensus">${scaleConsensus(0, allResponses)}</div>` + radarHtml;
     container._scaleConsensus = (idx) => scaleConsensus(idx, allResponses);
     container._allResponses = allResponses;
 
     if (coffees.length) {
-      setTimeout(() => buildBubbleChart(0), 150);
+      setTimeout(() => {
+        buildBubbleChart(0);
+        if (coffees.length > 1) buildRadarChart(coffees, allResponses);
+      }, 150);
     }
   }
 
