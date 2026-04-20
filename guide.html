@@ -81,6 +81,37 @@
       color: #2d3b2d; text-decoration: none; transition: color 0.2s;
     }
     .site-nav-back:hover { color: #2d3b2d; }
+    /* ── NAV ── */
+    nav {
+      background: var(--dark);
+      padding: 18px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; color: var(--light); text-decoration: none;
+    }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 20px; list-style: none; margin: 0; padding: 0; }
+    .nav-link {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(232,228,217,0.7); text-decoration: none;
+      transition: color 0.2s; white-space: nowrap;
+    }
+    .nav-link:hover { color: var(--cream); }
+    .nav-cta {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      background: var(--cream); color: var(--dark);
+      padding: 8px 16px; border-radius: 50px; text-decoration: none;
+      transition: background 0.2s; white-space: nowrap;
+    }
+    .nav-cta:hover { background: #fff; }
+    @media (max-width: 560px) {
+      .nav-links { gap: 12px; }
+      .nav-link { font-size: 0.5rem; letter-spacing: 0.06em; }
+    }
   </style>
   <title>Beginner's Guide to Coffee Cupping — CupIT</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -601,9 +632,9 @@
 <nav>
   <a href="index.html" class="nav-logo">Cup<em>IT</em></a>
   <ul class="nav-links">
-    <li><a href="about.html">About</a></li>
-    <li><a href="guide.html">Beginner's guide</a></li>
-    <li><a href="login.html">Log in</a></li>
+    <li><a href="about.html" class="nav-link">About</a></li>
+    <li><a href="guide.html" class="nav-link">Beginner's guide</a></li>
+    <li><a href="login.html" class="nav-link">Log in</a></li>
     <li><a href="signup.html" class="nav-cta">Get started</a></li>
   </ul>
 </nav>

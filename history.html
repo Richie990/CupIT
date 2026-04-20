@@ -101,29 +101,18 @@
 
     /* ── NAV ── */
     .top-nav {
-      position: sticky; top: 0; z-index: 200;
-      background: rgba(250,246,238,0.97);
-      backdrop-filter: blur(10px);
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(232,228,217,0.95); backdrop-filter: blur(10px);
       border-bottom: 1px solid var(--divider);
-      padding: 13px 24px;
+      padding: 14px 20px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .nav-logo {
-      font-family: 'Playfair Display', serif;
-      font-size: 1rem; font-weight: 600;
-      color: var(--brown); text-decoration: none;
-    }
+    .nav-logo { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--brown); text-decoration: none; }
     .nav-logo em { font-style: italic; color: var(--accent); }
     .nav-links { display: flex; align-items: center; gap: 20px; }
-    .nav-link {
-      font-family: 'DM Mono', monospace; font-size: 0.58rem;
-      letter-spacing: 0.1em; text-transform: uppercase;
-      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
-      white-space: nowrap;
-    }
+    .nav-link { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid); text-decoration: none; transition: color 0.2s; white-space: nowrap; }
     .nav-link:hover { color: var(--brown); }
     .nav-link.active { color: var(--brown); font-weight: 500; }
-
     @media (max-width: 560px) {
       .nav-links { gap: 12px; }
       .nav-link { font-size: 0.5rem; letter-spacing: 0.06em; }

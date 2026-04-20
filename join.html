@@ -287,7 +287,13 @@
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
     .results-pulse-anim { animation: pulse 1.5s ease infinite; }
     .results-card {
-      min-width:100%; box-sizing:border-box; padding:0 20px;
+      min-width:100%; width:100%; box-sizing:border-box; padding:0 4px;
+    }
+    #results-carousel-wrap {
+      width:100%; overflow:hidden;
+    }
+    #results-carousel {
+      display:flex; width:100%;
     }
     .results-coffee-card {
       background:rgba(232,228,217,0.04);border:1px solid rgba(232,228,217,0.1);
@@ -400,8 +406,8 @@
       <span id="results-status-text" style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:#c9a84c">Session in progress</span>
     </div>
     <div id="results-pills" style="display:flex;justify-content:center;gap:8px;margin-bottom:16px;flex-wrap:wrap"></div>
-    <div id="results-carousel-wrap" style="overflow:hidden;position:relative">
-      <div id="results-carousel" style="display:flex;transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);will-change:transform"></div>
+    <div id="results-carousel-wrap">
+      <div id="results-carousel" style="transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);will-change:transform"></div>
     </div>
   </div>
 
