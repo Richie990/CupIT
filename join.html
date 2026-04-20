@@ -296,15 +296,15 @@
       display:flex; width:100%;
     }
     .results-coffee-card {
-      background:rgba(232,228,217,0.04);border:1px solid rgba(232,228,217,0.1);
+      background:var(--paper);border:1px solid var(--divider);
       border-radius:14px;padding:18px;
     }
     .results-pill {
       width:8px;height:8px;border-radius:50%;
-      background:rgba(232,228,217,0.2);cursor:pointer;
+      background:var(--divider);cursor:pointer;
       transition:all 0.2s;border:none;padding:0;
     }
-    .results-pill.active { background:#c9a84c;width:24px;border-radius:4px; }
+    .results-pill.active { background:var(--accent);width:24px;border-radius:4px; }
 
     .btn-submit-session {
       width: 100%; padding: 15px; margin-top: 20px;
@@ -375,36 +375,13 @@
     <p style="font-size:0.9rem;font-weight:500;color:var(--brown);margin-top:4px" id="state-scheduled-name"></p>
   </div>
 
-  <!-- Session ended -->
-  <div class="state-card" id="state-closed" style="display:none">
-    <span class="state-icon">🔒</span>
-    <h2 class="state-title">Session <em>ended</em></h2>
-    <p class="state-body">The host has closed this cupping session. No further responses can be submitted.</p>
-    <p style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-top:16px">Session</p>
-    <p style="font-size:0.9rem;font-weight:500;color:var(--brown);margin-top:4px" id="state-closed-name"></p>
-  </div>
 
-  <!-- Already submitted state -->
-  <div class="state-card" id="state-submitted" style="display:none">
-    <span class="state-icon">✅</span>
-    <h2 class="state-title">Already <em>submitted</em></h2>
-    <p class="state-body">You've already submitted your notes for this session. Thanks for cupping!</p>
-    <button onclick="showResults()" style="margin-top:20px;width:100%;padding:13px;border-radius:50px;border:none;background:var(--dark);color:var(--cream);font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer">View results →</button>
-  </div>
-
-  <!-- Thank you state -->
-  <div class="state-card" id="state-thanks" style="display:none">
-    <span class="state-icon">✅</span>
-    <h2 class="state-title">Notes <em>submitted</em></h2>
-    <p class="state-body">Your tasting notes have been saved. Thanks for cupping!</p>
-    <button onclick="showResults()" style="margin-top:20px;width:100%;padding:13px;border-radius:50px;border:none;background:var(--dark);color:var(--cream);font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer">View results →</button>
-  </div>
 
   <!-- Results view — shown after submit -->
   <div id="state-results" style="display:none;padding:0 0 40px">
-    <div id="results-status" style="display:flex;align-items:center;gap:8px;padding:12px 20px;margin-bottom:20px;background:rgba(201,168,76,0.08);border-radius:10px">
-      <div id="results-pulse" style="width:8px;height:8px;border-radius:50%;background:#c9a84c;flex-shrink:0"></div>
-      <span id="results-status-text" style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:#c9a84c">Session in progress</span>
+    <div id="results-status" style="display:flex;align-items:center;gap:8px;padding:12px 20px;margin-bottom:20px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.25);border-radius:10px">
+      <div id="results-pulse" style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0"></div>
+      <span id="results-status-text" style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--brown)">Session in progress</span>
     </div>
     <div id="results-pills" style="display:flex;justify-content:center;gap:8px;margin-bottom:16px;flex-wrap:wrap"></div>
     <div id="results-carousel-wrap">
@@ -479,89 +456,72 @@
   ];
 
   // ── INIT ──
+  // ── INIT ──
   async function init() {
     const params = new URLSearchParams(window.location.search);
     const token  = params.get('token');
-
     if (!token) { showError(); return; }
 
-    // Check if this guest already submitted in this browser session
-    if (sessionStorage.getItem(`submitted_${token}`)) {
-      // Still need session data for results view
-      const { data } = await window.supabaseClient
-        .from('cupping_sessions')
-        .select('session_name, coffees, params_active, status, blind, scheduled_at')
-        .eq('share_token', token)
-        .single();
-      if (data) sessionData = { ...data, token };
-      document.getElementById('state-loading').style.display = 'none';
-      document.getElementById('state-submitted').style.display = 'block';
-      return;
-    }
-
     try {
-      // Fetch session using share token — check is_active too
       const { data, error } = await window.supabaseClient
         .from('cupping_sessions')
-        .select('session_name, coffees, params_active, is_active, status, blind, scheduled_at, recurrence')
+        .select('session_name, coffees, params_active, is_active, status, blind, scheduled_at')
         .eq('share_token', token)
         .single();
 
       if (error || !data) { showError(); return; }
 
-      // Check session status
+      sessionData = { ...data, token };
+      document.getElementById('state-loading').style.display = 'none';
+
+      // SCHEDULED — not started yet
       if (data.status === 'scheduled') {
-        document.getElementById('state-loading').style.display = 'none';
         document.getElementById('state-scheduled').style.display = 'block';
         document.getElementById('header-title').innerHTML = 'Session <em>not started yet</em>';
         document.getElementById('state-scheduled-name').textContent = data.session_name || 'Untitled session';
-        let scheduledMsg = "The host hasn't started this session yet. Check back soon.";
+        let msg = "The host hasn't started this session yet. Check back soon.";
         if (data.scheduled_at) {
           const d = new Date(data.scheduled_at);
           const dateStr = d.toLocaleDateString('en-IE', { weekday:'long', day:'numeric', month:'long' });
-          const hasTime = data.scheduled_at.includes('T') && !data.scheduled_at.endsWith('T00:00:00.000Z') && d.getUTCHours() !== 0;
-          const timeStr = hasTime ? ' at ' + d.toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' }) : '';
-          scheduledMsg = `Scheduled for ${dateStr}${timeStr}. Check back then.`;
+          const hasTime = !data.scheduled_at.endsWith('T00:00:00.000Z') && d.getUTCHours() !== 0;
+          msg = `Scheduled for ${dateStr}${hasTime ? ' at ' + d.toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' }) : ''}. Check back then.`;
         }
-        document.getElementById('state-scheduled-msg').textContent = scheduledMsg;
-        document.getElementById('header-sub').textContent = scheduledMsg;
-        return;
-      }
-      if (data.status === 'ended' || data.status === 'cancelled' || !data.is_active) {
-        document.getElementById('state-loading').style.display = 'none';
-        document.getElementById('state-closed').style.display = 'block';
-        document.getElementById('header-title').innerHTML = 'Session <em>ended</em>';
-        document.getElementById('header-sub').textContent = 'This session is no longer accepting responses';
-        const closedName = document.getElementById('state-closed-name');
-        if (closedName) closedName.textContent = data.session_name || 'Untitled session';
+        document.getElementById('state-scheduled-msg').textContent = msg;
+        document.getElementById('header-sub').textContent = msg;
         return;
       }
 
-      sessionData = { ...data, token };
+      // ENDED/CANCELLED — show results directly
+      if (data.status === 'ended' || data.status === 'cancelled') {
+        resultsIsEnded = true;
+        document.getElementById('header-title').innerHTML = escHtml(data.session_name);
+        document.getElementById('header-sub').textContent = 'Session complete';
+        await showResults();
+        return;
+      }
 
-      // Update header
+      // ACTIVE — already submitted, go straight to results
+      if (sessionStorage.getItem(`submitted_${token}`)) {
+        document.getElementById('header-title').innerHTML = escHtml(data.session_name);
+        document.getElementById('header-sub').textContent = 'Session in progress';
+        await showResults();
+        return;
+      }
+
+      // ACTIVE — not yet submitted, show cupping flow
       document.getElementById('header-title').innerHTML = escHtml(data.session_name);
       const blindMode = data.blind === true;
       document.getElementById('header-sub').textContent = `${data.coffees.length} coffee${data.coffees.length > 1 ? 's' : ''} to taste${blindMode ? ' — blind cupping' : ''}`;
-      document.getElementById('header-tag').textContent = 'You\'ve been invited';
-
-      // Initialise guest coffees array
+      document.getElementById('header-tag').textContent = "You've been invited";
       guestCoffees = data.coffees.map(c => ({ name: c.name, data: {} }));
       flavourPicks = data.coffees.map(() => []);
-
-      // Hide loading, show name step
-      document.getElementById('state-loading').style.display = 'none';
       document.getElementById('step-name').style.display = 'block';
 
-      // Check if user is already logged in to CupIT
+      // Check if already logged in to CupIT
       const { data: { session: authSession } } = await window.supabaseClient.auth.getSession();
       if (authSession) {
         const { data: profile } = await window.supabaseClient
-          .from('profiles')
-          .select('name')
-          .eq('user_id', authSession.user.id)
-          .single();
-
+          .from('profiles').select('name').eq('user_id', authSession.user.id).single();
         if (profile?.name) {
           guestUserId = authSession.user.id;
           guestName   = profile.name;
@@ -858,7 +818,10 @@
 
       if (!check || check.status !== 'active') {
         document.getElementById('step-cupping').style.display = 'none';
-        document.getElementById('state-closed').style.display = 'block';
+        document.getElementById('header-title').innerHTML = 'Session <em>ended</em>';
+        document.getElementById('header-sub').textContent = 'This session has ended';
+        resultsIsEnded = true;
+        await showResults();
         return;
       }
 
@@ -900,8 +863,8 @@
   let resultsCurrentIdx = 0;
   let resultsSub = null;
   let resultsSessionSub = null;
+  let resultsPoller = null;
   let resultsCharts = {};
-  let resultsIsBlind = false;
   let resultsIsEnded = false;
 
   const SCALE_FIELDS = [
@@ -912,24 +875,23 @@
   ];
 
   async function showResults() {
-    document.getElementById('state-thanks').style.display = 'none';
-    document.getElementById('state-submitted').style.display = 'none';
     document.getElementById('state-results').style.display = 'block';
     document.querySelector('.page-header h1').innerHTML = 'Session <em>results</em>';
-    resultsIsBlind = sessionData.blind === true;
     if (resultsIsEnded) setResultsStatus(true);
     await fetchAndRenderResults();
     if (!resultsIsEnded) subscribeToResults();
   }
 
   async function fetchAndRenderResults() {
+    console.log('[Results] Fetching results...');
     const { data: session } = await window.supabaseClient
       .from('cupping_sessions')
       .select('coffees, status, blind')
       .eq('share_token', sessionData.token)
       .single();
 
-    if (!session) return;
+    if (!session) { console.log('[Results] No session found'); return; }
+    console.log('[Results] Session status:', session.status);
 
     const ended = session.status === 'ended';
     if (ended && !resultsIsEnded) {
@@ -942,6 +904,8 @@
       .from('session_responses')
       .select('coffees')
       .eq('share_token', sessionData.token);
+
+    console.log('[Results] Responses found:', responses?.length || 0);
 
     const coffees = session.coffees || [];
     const hostAsResp = { coffees: coffees.map(c => ({ name: c.name, data: c.data || {} })) };
@@ -975,7 +939,7 @@
 
       return `<div class="results-card">
         <div class="results-coffee-card">
-          <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:#8faa8b;margin:0 0 4px">${tasterCount} taster${tasterCount!==1?'s':''}</p>
+          <p style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin:0 0 4px">${tasterCount} taster${tasterCount!==1?'s':''}</p>
           <p style="font-size:1rem;font-weight:500;color:var(--brown);margin:0 0 16px">${displayName}</p>
           ${hasData ? `
             <div style="position:relative;width:100%;height:200px;margin-bottom:16px">
@@ -1064,24 +1028,32 @@
     const wrap  = document.getElementById('results-status');
     if (ended) {
       pulse.classList.remove('results-pulse-anim');
-      pulse.style.background = '#8faa8b';
+      pulse.style.background = 'var(--mid)';
       text.textContent = 'Session complete';
-      text.style.color = '#8faa8b';
-      wrap.style.background = 'rgba(143,170,139,0.08)';
+      text.style.color = 'var(--brown)';
+      wrap.style.background = 'rgba(143,170,139,0.1)';
+      wrap.style.borderColor = 'rgba(143,170,139,0.25)';
     } else {
       pulse.classList.add('results-pulse-anim');
     }
   }
 
   function subscribeToResults() {
+    console.log('[Results] Starting subscriptions for token:', sessionData.token);
+
     // Subscribe to new responses
     resultsSub = window.supabaseClient
       .channel('results-responses')
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'session_responses',
         filter: `share_token=eq.${sessionData.token}`,
-      }, () => fetchAndRenderResults())
-      .subscribe();
+      }, (payload) => {
+        console.log('[Results] Response change detected:', payload);
+        fetchAndRenderResults();
+      })
+      .subscribe((status) => {
+        console.log('[Results] session_responses subscription status:', status);
+      });
 
     // Subscribe to session status changes
     resultsSessionSub = window.supabaseClient
@@ -1090,6 +1062,7 @@
         event: 'UPDATE', schema: 'public', table: 'cupping_sessions',
         filter: `share_token=eq.${sessionData.token}`,
       }, payload => {
+        console.log('[Results] Session change detected:', payload);
         if (payload.new?.status === 'ended') {
           resultsIsEnded = true;
           stopResultsSubs();
@@ -1097,12 +1070,15 @@
           fetchAndRenderResults();
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Results] cupping_sessions subscription status:', status);
+      });
   }
 
   function stopResultsSubs() {
     if (resultsSub)        { window.supabaseClient.removeChannel(resultsSub);        resultsSub = null; }
     if (resultsSessionSub) { window.supabaseClient.removeChannel(resultsSessionSub); resultsSessionSub = null; }
+    if (resultsPoller)     { clearInterval(resultsPoller); resultsPoller = null; }
   }
 
   function escHtml(s) {
