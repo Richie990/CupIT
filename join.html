@@ -1041,6 +1041,12 @@
   function subscribeToResults() {
     if (resultsIsEnded) return;
 
+    // Set realtime auth — session token if logged in, anon key for guests
+    window.supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      const token = session?.access_token || window.supabaseClient.supabaseKey;
+      window.supabaseClient.realtime.setAuth(token);
+    });
+
     // Realtime — new responses
     resultsSub = window.supabaseClient
       .channel('results-responses')
