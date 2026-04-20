@@ -32,6 +32,9 @@
 const SUPABASE_URL      = 'https://xlfyhohxotldmfetezel.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhsZnlob2h4b3RsZG1mZXRlemVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTU2MzIsImV4cCI6MjA5MDg5MTYzMn0._yCwdVRHbnle9SlGuGEGXtCnpZwMYhn9xT2vI-Jeclk';
 
+// Exposed globally so pages can pass it to realtime.setAuth for anon sessions
+window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
+
 // Define track() immediately as a no-op so any page script that calls
 // track() before config.js fully runs never throws a ReferenceError.
 // It gets replaced below with the real implementation once Supabase loads.

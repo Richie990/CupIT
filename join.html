@@ -1043,7 +1043,7 @@
 
     // Set realtime auth — session token if logged in, anon key for guests
     window.supabaseClient.auth.getSession().then(({ data: { session } }) => {
-      const token = session?.access_token || window.supabaseClient.supabaseKey;
+      const token = session?.access_token || window.SUPABASE_ANON_KEY;
       window.supabaseClient.realtime.setAuth(token);
     });
 
