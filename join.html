@@ -442,6 +442,7 @@
   let currentCoffee  = 0;
   let guestCoffees   = [];    // array of { name, data: {} } matching host's coffees
   let flavourPicks   = [];    // per-coffee flavour selections: array of arrays
+  let scalePicks    = [];    // per-coffee scale selections: array of objects
 
 
   const WHEEL = [
@@ -529,6 +530,7 @@
       document.getElementById('header-tag').textContent = "You've been invited";
       guestCoffees = data.coffees.map(c => ({ name: c.name, data: {} }));
       flavourPicks = data.coffees.map(() => []);
+      scalePicks   = data.coffees.map(() => ({}));
       document.getElementById('step-name').style.display = 'block';
 
       // Check if already logged in to CupIT
@@ -706,11 +708,15 @@
     return html;
   }
 
-  // Scale pill selection for guests
+  // Scale pill selection for guests — stores in scalePicks state
   function selectScalePill(btn) {
-    const groupId = btn.dataset.group;
+    const groupId  = btn.dataset.group;
+    const lastDash  = groupId.lastIndexOf('-');
+    const coffeeIdx = parseInt(groupId.slice(lastDash + 1));
+    const fieldId   = groupId.slice(0, lastDash);
     document.querySelectorAll(`#${groupId} .guest-scale-pill`).forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    if (scalePicks[coffeeIdx] !== undefined) scalePicks[coffeeIdx][fieldId] = btn.dataset.val;
   }
 
   // ── FLAVOUR WHEEL ──
@@ -798,11 +804,10 @@
       // Host-only fields — not collected from guests
       const HOST_ONLY = new Set(['origin','variety','producer','roaster','harvest','process','roast']);
 
-      // Scale fields — read active pill
+      // Scale fields — read from scalePicks state
       ['body','dry_aroma','wet_aroma','aftertaste'].forEach(k => {
-        if (params.has(k)) {
-          const active = document.querySelector(`#${k}-${i} .guest-scale-pill.active`);
-          if (active) data[k] = active.textContent.trim();
+        if (params.has(k) && scalePicks[i]?.[k]) {
+          data[k] = scalePicks[i][k];
         }
       });
       // Tasting notes — free text
