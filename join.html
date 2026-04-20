@@ -488,6 +488,20 @@
         }
         document.getElementById('state-scheduled-msg').textContent = msg;
         document.getElementById('header-sub').textContent = msg;
+
+        // Poll every 5 seconds until session goes active then reload
+        const scheduledPoller = setInterval(async () => {
+          const { data: check } = await window.supabaseClient
+            .from('cupping_sessions')
+            .select('status')
+            .eq('share_token', token)
+            .single();
+          if (check && check.status !== 'scheduled') {
+            clearInterval(scheduledPoller);
+            document.getElementById('state-scheduled').style.display = 'none';
+            init();
+          }
+        }, 5000);
         return;
       }
 
