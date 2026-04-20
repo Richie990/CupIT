@@ -68,6 +68,7 @@
     :root {
       --bg:      #e8e4d9;
       --paper:   #f0ede5;
+      --cream:   #e8e4d9;
       --dark:    #1a2319;
       --brown:   #2d3b2d;
       --mid:     #8faa8b;
@@ -117,7 +118,7 @@
     .nav-link {
       font-family: 'DM Mono', monospace; font-size: 0.58rem;
       letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--mid); text-decoration: none; transition: color 0.2s;
+      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
       white-space: nowrap;
     }
     .nav-link:hover { color: var(--brown); }
@@ -126,10 +127,6 @@
     @media (max-width: 560px) {
       .nav-links { gap: 12px; }
       .nav-link { font-size: 0.5rem; letter-spacing: 0.06em; }
-    }
-    @media (max-width: 400px) {
-      .nav-link:not(.active):not([onclick]) { display: none; }
-      .nav-link[onclick] { display: block; }
     }
 
     /* ── PAGE HEADER ── */
@@ -1142,6 +1139,70 @@
         }
       }]
     });
+  }
+
+  function buildRadarChart(coffees, allResponses) {
+    const canvas = document.getElementById('report-radar');
+    if (!canvas) return;
+
+    const SCALE_FIELDS = [
+      { id:'body',       label:'Body',       options:['None','Light','Round','Full','Syrupy'] },
+      { id:'dry_aroma',  label:'Dry aroma',  options:['Faint','Delicate','Moderate','Intense','Complex'] },
+      { id:'wet_aroma',  label:'Wet aroma',  options:['Faint','Delicate','Moderate','Intense','Complex'] },
+      { id:'aftertaste', label:'Aftertaste', options:['Short','Medium','Long','Lingering'] },
+    ];
+    const COLORS = ['#e8e4d9','#c9a84c','#8faa8b','#5dcaa5'];
+
+    const datasets = coffees.map((cf, ci) => {
+      const data = SCALE_FIELDS.map(sf => {
+        const counts = {};
+        sf.options.forEach(o => counts[o] = 0);
+        allResponses.forEach(r => {
+          const val = r.coffees?.[ci]?.data?.[sf.id];
+          if (val && counts[val] !== undefined) counts[val]++;
+        });
+        const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+        return top?.[1] > 0 ? sf.options.indexOf(top[0]) : 0;
+      });
+      return {
+        label: cf.name,
+        data,
+        borderColor: COLORS[ci % COLORS.length],
+        backgroundColor: 'rgba(0,0,0,0)',
+        borderWidth: 2,
+        pointBackgroundColor: COLORS[ci % COLORS.length],
+        pointRadius: 3,
+      };
+    });
+
+    if (window._radarChartInst) { try { window._radarChartInst.destroy(); } catch(e){} }
+    window._radarChartInst = new Chart(canvas, {
+      type: 'radar',
+      data: { labels: SCALE_FIELDS.map(f => f.label), datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          r: {
+            min: 0, max: 4,
+            ticks: { display: false, stepSize: 1 },
+            pointLabels: { font: { size: 11 }, color: '#8faa8b' },
+            grid: { color: 'rgba(232,228,217,0.08)' },
+            angleLines: { color: 'rgba(232,228,217,0.08)' },
+          }
+        }
+      }
+    });
+
+    const legend = document.getElementById('report-radar-legend');
+    if (legend) {
+      legend.innerHTML = coffees.map((cf, i) =>
+        `<span style="display:flex;align-items:center;gap:6px">
+          <span style="width:10px;height:10px;border-radius:2px;background:${COLORS[i % COLORS.length]};flex-shrink:0"></span>
+          ${escHtml(cf.name)}
+        </span>`
+      ).join('');
+    }
   }
 
   function closeDrawer() {

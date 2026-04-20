@@ -100,17 +100,13 @@
     .nav-link {
       font-family: 'DM Mono', monospace; font-size: 0.58rem;
       letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--mid); text-decoration: none; transition: color 0.2s;
+      color: rgba(232,228,217,0.7); text-decoration: none; transition: color 0.2s;
     }
     .nav-link:hover { color: var(--brown); }
     .nav-link.active { color: var(--brown); }
     @media (max-width: 560px) {
       .nav-links { gap: 12px; }
       .nav-link { font-size: 0.5rem; letter-spacing: 0.06em; }
-    }
-    @media (max-width: 400px) {
-      .nav-link:not(.active):not([onclick]) { display: none; }
-      .nav-link[onclick] { display: block; }
     }
 
     /* ── MAIN CONTENT ── */
