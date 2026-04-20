@@ -823,11 +823,7 @@
       guestCoffees[i].data = data;
     }
 
-    // DEBUG — remove after testing
-    alert(JSON.stringify(guestCoffees, null, 2));
-    return;
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
+    const btn = document.getElementById('btn-submit');
 
     try {
       // Final server-side check — make sure session is still active
