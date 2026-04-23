@@ -203,6 +203,22 @@
     .filter-search { flex: 1; min-width: 160px; }
     .filter-sep { color: var(--light); font-size: 0.8rem; }
 
+    /* Mobile sort dropdown — hidden on desktop where table headers handle sorting */
+    .mobile-sort { display: none; }
+    @media (max-width: 640px) {
+      .mobile-sort {
+        display: block;
+        flex: 1 0 100%;
+        font-family: 'DM Mono', monospace; font-size: 0.68rem;
+        letter-spacing: 0.06em;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238faa8b' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        padding-right: 32px;
+        cursor: pointer;
+      }
+    }
+
     /* ── TABLE ── */
     .table-wrap {
       overflow-x: auto;
@@ -297,6 +313,92 @@
     .flavour-more {
       font-family: 'DM Mono', monospace; font-size: 0.55rem;
       color: var(--brown); white-space: nowrap; padding-top: 2px;
+    }
+
+    /* ── MOBILE CARD VIEW ── (below 640px) */
+    /* On phones, the table becomes a stacked card list. Each session
+       is a self-contained card with the same data, restructured for
+       a narrow viewport. */
+    .session-cards {
+      display: none;
+      padding: 8px 16px 80px;
+      gap: 10px;
+      flex-direction: column;
+    }
+    .session-card {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: 14px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      animation: fadeUp 0.2s ease both;
+    }
+    .session-card:active { background: var(--bg); }
+    .session-card.selected { border-color: var(--accent); background: rgba(201,168,76,0.06); }
+
+    .card-top {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 10px; margin-bottom: 6px;
+    }
+    .card-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem; font-weight: 600;
+      color: var(--brown); line-height: 1.25;
+      flex: 1; min-width: 0;
+    }
+    .card-date {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.05em; color: var(--mid);
+      white-space: nowrap; flex-shrink: 0; padding-top: 3px;
+    }
+    .card-meta {
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 10px;
+      display: flex; flex-wrap: wrap; gap: 4px 10px;
+    }
+    .card-meta-item { display: inline-flex; align-items: center; gap: 4px; }
+    .card-meta-dot { color: rgba(45,59,45,0.25); }
+    .card-flavours { display: flex; flex-wrap: wrap; gap: 5px; }
+    .card-flavours:empty { display: none; }
+
+    /* Below 640px: hide table, show cards; filter bar goes to 2 rows */
+    @media (max-width: 640px) {
+      .table-wrap { overflow-x: visible; padding-bottom: 0; }
+      #session-table { display: none !important; }
+      .session-cards.show { display: flex; }
+
+      .page-header { padding: 20px 16px 14px; }
+      .page-title { font-size: 1.25rem; }
+      .btn-new-session { padding: 10px 18px; font-size: 0.55rem; }
+
+      .mode-toggle-wrap { padding: 0 16px 12px; }
+
+      /* Filter bar: search full-width on its own row, dates share the second row */
+      .filter-bar {
+        padding: 12px 16px;
+        gap: 8px;
+      }
+      .filter-search { flex: 1 0 100%; min-width: 0; }
+      .filter-bar > .filter-input[type="date"] { flex: 1; min-width: 0; }
+      .filter-sep { font-size: 0.7rem; }
+    }
+
+    /* Tablet: table stays but with tighter padding */
+    @media (max-width: 900px) and (min-width: 641px) {
+      th, td { padding: 10px 12px; }
+      .td-flavours { max-width: 160px; }
+    }
+
+    /* Drawer at phone sizes — extend max-height and tighten padding */
+    @media (max-width: 640px) {
+      .drawer { max-height: 92vh; }
+      .drawer-header { padding: 14px 16px 10px; }
+      .drawer-body { padding: 0 16px 16px; }
+      .drawer-footer { padding: 14px 16px 20px; gap: 8px; }
+      .drawer-coffee { padding: 14px; }
+      .drawer-title { font-size: 1.05rem; }
     }
 
     /* ── DRAWER ── */
@@ -597,6 +699,11 @@
   <span class="filter-sep">—</span>
   <input type="date" class="filter-input" id="filter-date-to"
     title="To date" onchange="renderTable()" />
+  <!-- Mobile-only sort control — hidden on desktop where table headers are used -->
+  <select class="filter-input mobile-sort" id="mobile-sort"
+          onchange="setMobileSort(this.value)" title="Sort by">
+    <!-- Options are built dynamically based on mode -->
+  </select>
 
 
 </div>
@@ -613,6 +720,9 @@
     <thead id="table-head"></thead>
     <tbody id="table-body"></tbody>
   </table>
+
+  <!-- Mobile card view — populated by renderTable() alongside the table -->
+  <div class="session-cards" id="session-cards"></div>
 </div>
 
 
@@ -686,6 +796,7 @@
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('filter-date-from').value = today;
     document.getElementById('filter-date-to').value   = today;
+    rebuildMobileSortOptions();
     renderTable();
   }
 
@@ -815,6 +926,7 @@
     sortCol = 'date';
     sortAsc = false;
 
+    rebuildMobileSortOptions();
     renderTable();
   }
 
@@ -874,7 +986,49 @@
       sortCol = col;
       sortAsc = (col === 'name' || col === 'roaster' || col === 'host'); // alpha cols default asc
     }
+    syncMobileSort();
     renderTable();
+  }
+
+  // Mobile dropdown sort — the value encodes "column:direction" so we can set
+  // a sensible direction per option without needing a separate asc/desc toggle.
+  function setMobileSort(value) {
+    const [col, dir] = value.split(':');
+    track('history_sorted', { column: col, mode, from: 'mobile' });
+    sortCol = col;
+    sortAsc = dir === 'asc';
+    renderTable();
+  }
+
+  // Rebuild the mobile sort dropdown options based on the current mode
+  function rebuildMobileSortOptions() {
+    const sel = document.getElementById('mobile-sort');
+    const options = mode === 'hosted' ? [
+      ['date:desc',    'Newest first'],
+      ['date:asc',     'Oldest first'],
+      ['name:asc',     'Session A → Z'],
+      ['name:desc',    'Session Z → A'],
+      ['coffees:desc', 'Most coffees'],
+      ['coffees:asc',  'Fewest coffees'],
+      ['roaster:asc',  'Roaster A → Z'],
+    ] : [
+      ['date:desc',    'Newest first'],
+      ['date:asc',     'Oldest first'],
+      ['name:asc',     'Session A → Z'],
+      ['name:desc',    'Session Z → A'],
+      ['host:asc',     'Host A → Z'],
+      ['coffees:desc', 'Most coffees'],
+    ];
+    sel.innerHTML = options.map(([v, l]) =>
+      `<option value="${v}">${l}</option>`
+    ).join('');
+    syncMobileSort();
+  }
+
+  // Keep the mobile dropdown in sync with sortCol/sortAsc
+  function syncMobileSort() {
+    const sel = document.getElementById('mobile-sort');
+    if (sel) sel.value = `${sortCol}:${sortAsc ? 'asc' : 'desc'}`;
   }
 
   function sortSessions(arr) {
@@ -964,6 +1118,11 @@
     }
 
     const tbody = document.getElementById('table-body');
+    const cards = document.getElementById('session-cards');
+
+    // Toggle card container visibility — always 'show' when we have rows on mobile
+    cards.classList.toggle('show', !isEmpty);
+
     tbody.innerHTML = sorted.map((s, i) => {
       // Gather all flavours from all coffees in the session (user's own in guest mode)
       const allFlavours  = [...new Set(s.coffees.flatMap(c => c.data?.flavours || []))];
@@ -1005,6 +1164,44 @@
           ${flavoursCell}
         </tr>`;
       }
+    }).join('');
+
+    // ── Mobile card view ── (same data, different structure)
+    cards.innerHTML = sorted.map((s, i) => {
+      const allFlavours  = [...new Set(s.coffees.flatMap(c => c.data?.flavours || []))];
+      const showFlavours = allFlavours.slice(0, 4);
+      const extraCount   = allFlavours.length - showFlavours.length;
+
+      const coffeeLabel = `${s.coffees.length} coffee${s.coffees.length !== 1 ? 's' : ''}`;
+
+      // Meta line differs by mode
+      let metaItems;
+      if (mode === 'hosted') {
+        const roasters = [...new Set(s.coffees.map(c => c.data?.roaster).filter(Boolean))];
+        metaItems = [coffeeLabel];
+        if (roasters.length) metaItems.push(escHtml(roasters.join(', ')));
+      } else {
+        metaItems = [coffeeLabel, `by ${escHtml(s.hostName)}`];
+      }
+
+      return `<div class="session-card ${activeDrawerId === s.id ? 'selected' : ''}"
+                   onclick="openDrawer('${s.id}')"
+                   style="animation-delay:${i*30}ms">
+        <div class="card-top">
+          <div class="card-name">${escHtml(s.name)}</div>
+          <div class="card-date">${formatDate(s.date)}</div>
+        </div>
+        <div class="card-meta">
+          ${metaItems.map((item, idx) => `
+            ${idx > 0 ? '<span class="card-meta-dot">·</span>' : ''}
+            <span class="card-meta-item">${item}</span>
+          `).join('')}
+        </div>
+        <div class="card-flavours">
+          ${showFlavours.map(f => `<span class="flavour-chip">${escHtml(f)}</span>`).join('')}
+          ${extraCount > 0 ? `<span class="flavour-more">+${extraCount} more</span>` : ''}
+        </div>
+      </div>`;
     }).join('');
   }
 
