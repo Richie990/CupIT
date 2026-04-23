@@ -147,6 +147,40 @@
     }
     .btn-new-session:hover { background: var(--brown); }
 
+    /* ── MODE TOGGLE ── (Hosted / Joined) */
+    .mode-toggle-wrap {
+      padding: 0 24px 16px;
+      display: flex; justify-content: flex-start;
+    }
+    .mode-toggle {
+      display: inline-flex; background: var(--paper);
+      border: 1px solid var(--divider); border-radius: 50px;
+      padding: 3px; gap: 0;
+    }
+    .mode-toggle-btn {
+      padding: 8px 18px; border: none; background: transparent;
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); cursor: pointer; border-radius: 50px;
+      transition: all 0.2s; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .mode-toggle-btn:hover { color: var(--brown); }
+    .mode-toggle-btn.active {
+      background: var(--dark); color: var(--cream);
+    }
+    .mode-toggle-count {
+      font-size: 0.56rem; opacity: 0.7;
+      padding: 1px 6px; border-radius: 10px;
+      background: rgba(0,0,0,0.1);
+    }
+    .mode-toggle-btn.active .mode-toggle-count {
+      background: rgba(255,255,255,0.15);
+    }
+    @media (max-width: 420px) {
+      .mode-toggle-btn { padding: 8px 14px; font-size: 0.55rem; }
+    }
+
     /* ── FILTER BAR ── */
     .filter-bar {
       padding: 16px 24px;
@@ -536,6 +570,21 @@
 </div>
 
 
+<!-- ── MODE TOGGLE ── -->
+<div class="mode-toggle-wrap">
+  <div class="mode-toggle" role="tablist" aria-label="Session type">
+    <button class="mode-toggle-btn active" id="mode-hosted" role="tab"
+            aria-selected="true" onclick="setMode('hosted')">
+      Hosted <span class="mode-toggle-count" id="count-hosted">0</span>
+    </button>
+    <button class="mode-toggle-btn" id="mode-guest" role="tab"
+            aria-selected="false" onclick="setMode('guest')">
+      Joined <span class="mode-toggle-count" id="count-guest">0</span>
+    </button>
+  </div>
+</div>
+
+
 <!-- ── FILTER BAR ── -->
 <div class="filter-bar">
   <!-- Text search across session name and coffee names -->
@@ -561,24 +610,7 @@
   </div>
 
   <table id="session-table">
-    <thead>
-      <tr>
-        <!-- Each th has a data-col attribute used for sorting -->
-        <th data-col="date" onclick="setSort('date')" class="sorted">
-          Date <span class="sort-arrow" id="arrow-date">↓</span>
-        </th>
-        <th data-col="name" onclick="setSort('name')">
-          Session <span class="sort-arrow" id="arrow-name"></span>
-        </th>
-        <th data-col="coffees" onclick="setSort('coffees')">
-          Coffees <span class="sort-arrow" id="arrow-coffees"></span>
-        </th>
-        <th>Top flavours</th>
-        <th data-col="roaster" onclick="setSort('roaster')">
-          Roaster <span class="sort-arrow" id="arrow-roaster"></span>
-        </th>
-      </tr>
-    </thead>
+    <thead id="table-head"></thead>
     <tbody id="table-body"></tbody>
   </table>
 </div>
@@ -627,9 +659,11 @@
   // ══════════════════════════════════════════════════════════
   //  STATE
   // ══════════════════════════════════════════════════════════
-  let sessions     = [];      // full session array from loadSessions()
-  let sortCol      = 'date';  // currently sorted column
-  let sortAsc      = false;   // false = newest first (descending)
+  let sessions       = [];      // hosted sessions (the user's own)
+  let guestSessions  = [];      // sessions the user joined as a guest
+  let mode           = 'hosted';// 'hosted' | 'guest' — which dataset is shown
+  let sortCol        = 'date';  // currently sorted column
+  let sortAsc        = false;   // false = newest first (descending)
   let activeDrawerId  = null;  // id of the session currently in the drawer
   let currentSession  = null;  // full session object currently open in drawer
   let reportBuilt     = false; // whether report has been rendered for this session
@@ -647,13 +681,6 @@
       return;
     }
 
-    track('page_view', { page: 'history' });
-  // Redirect to homepage if session is terminated (e.g. account deleted in another tab)
-  window.supabaseClient.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') window.location.href = 'index.html';
-  });
-
-
     await loadSessions(session.user.id);
     // Default date range to today
     const today = new Date().toISOString().split('T')[0];
@@ -662,41 +689,105 @@
     renderTable();
   }
 
-  // Fetches all sessions for the current user from Supabase.
-  // Maps snake_case DB columns to the shape the rest of the page expects.
+  // Fetches BOTH hosted sessions and sessions the user has joined as a guest.
+  // Hosted: cupping_sessions WHERE user_id = me (excluding scheduled/cancelled/missed)
+  // Guest:  session_responses WHERE user_id = me, joined back to cupping_sessions
   async function loadSessions(userId) {
-    const { data, error } = await window.supabaseClient
-      .from('cupping_sessions')
-      .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status, blind, scheduled_at, recurrence')
-      .eq('user_id', userId)
-      .neq('status', 'cancelled')
-      .neq('status', 'scheduled')
-      .eq('missed', false)
-      .order('id', { ascending: false });
+    const [hostedRes, guestRes] = await Promise.all([
+      window.supabaseClient
+        .from('cupping_sessions')
+        .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status, blind, scheduled_at, recurrence')
+        .eq('user_id', userId)
+        .neq('status', 'cancelled')
+        .neq('status', 'scheduled')
+        .eq('missed', false)
+        .order('id', { ascending: false }),
+      window.supabaseClient
+        .from('session_responses')
+        .select(`
+          id, guest_name, coffees, created_at, share_token,
+          session:cupping_sessions!inner (
+            id, session_name, session_date, user_id, status,
+            host:profiles!cupping_sessions_user_id_fkey ( name )
+          )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false }),
+    ]);
 
-    if (error) {
-      console.error('Error loading sessions:', error.message);
+    // ── Hosted sessions ──
+    if (hostedRes.error) {
+      console.error('Error loading hosted sessions:', hostedRes.error.message);
       sessions = [];
-      return;
+    } else {
+      sessions = (hostedRes.data || []).map(s => ({
+        id:           s.id,
+        name:         s.session_name,
+        date:         s.session_date,
+        coffees:      s.coffees || [],
+        shareToken:   s.share_token || null,
+        isActive:     s.is_active,
+        status:       s.status || (s.is_active ? 'active' : 'ended'),
+        blind:        s.blind || false,
+        scheduledAt:  s.scheduled_at || null,
+        recurrence:   s.recurrence   || 'none',
+      }));
     }
 
-    // Map DB rows to the shape used throughout history.html
-    sessions = (data || []).map(s => ({
-      id:          s.id,
-      name:        s.session_name,
-      date:        s.session_date,
-      coffees:     s.coffees || [],
-      shareToken:  s.share_token || null,
-      isActive:    s.is_active,
-      status:      s.status || (s.is_active ? 'active' : 'ended'),
-      blind:        s.blind || false,
-      scheduledAt:  s.scheduled_at || null,
-      recurrence:   s.recurrence   || 'none',
-    }));
+    // ── Guest sessions (sessions I joined) ──
+    if (guestRes.error) {
+      console.error('Error loading guest sessions:', guestRes.error.message);
+      guestSessions = [];
+    } else {
+      guestSessions = (guestRes.data || [])
+        .filter(r => r.session) // safety — skip if host session was deleted
+        .map(r => ({
+          id:          'g_' + r.id, // prefix so IDs don't collide with hosted
+          responseId:  r.id,
+          name:        r.session.session_name,
+          date:        r.session.session_date,
+          hostSessionId: r.session.id,
+          hostName:    r.session.host?.name || 'Unknown host',
+          hostStatus:  r.session.status,
+          coffees:     r.coffees || [],   // the guest's (= user's) own responses
+          submittedAt: r.created_at,
+          guestName:   r.guest_name,
+          shareToken:  r.share_token,
+        }));
+    }
 
-    // Update session count in header
-    document.getElementById('session-count').textContent =
-      `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
+    // Update counts in the toggle
+    document.getElementById('count-hosted').textContent = sessions.length;
+    document.getElementById('count-guest').textContent  = guestSessions.length;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  MODE SWITCH (Hosted / Joined)
+  //  Switching mode resets selection, re-renders, and
+  //  re-applies the current sort to the new dataset.
+  // ══════════════════════════════════════════════════════════
+  function setMode(next) {
+    if (next === mode) return;
+    mode = next;
+    track('history_mode_switched', { to: next });
+
+    // Toggle button states
+    document.getElementById('mode-hosted').classList.toggle('active', mode === 'hosted');
+    document.getElementById('mode-guest').classList.toggle('active',  mode === 'guest');
+    document.getElementById('mode-hosted').setAttribute('aria-selected', mode === 'hosted');
+    document.getElementById('mode-guest').setAttribute('aria-selected',  mode === 'guest');
+
+    // Reset selection and sort defaults
+    activeDrawerId = null;
+    sortCol = 'date';
+    sortAsc = false;
+
+    renderTable();
+  }
+
+  // Returns the active dataset for the current mode
+  function activeDataset() {
+    return mode === 'hosted' ? sessions : guestSessions;
   }
 
   // ══════════════════════════════════════════════════════════
@@ -709,17 +800,19 @@
     const dateFrom = document.getElementById('filter-date-from').value;
     const dateTo   = document.getElementById('filter-date-to').value;
 
-    return sessions.filter(s => {
+    return activeDataset().filter(s => {
       // Text search: session name, coffee name, origin, variety, producer, process, roaster
+      // (In guest mode, coffees[] is the user's own responses — still has name + data)
       if (search) {
-        const nameMatch     = s.name.toLowerCase().includes(search);
-        const coffeeMatch   = s.coffees.some(c => c.name.toLowerCase().includes(search));
-        const roasterMatch  = s.coffees.some(c => (c.data.roaster   || '').toLowerCase().includes(search));
-        const originMatch   = s.coffees.some(c => (c.data.origin    || '').toLowerCase().includes(search));
-        const varietyMatch  = s.coffees.some(c => (c.data.variety   || '').toLowerCase().includes(search));
-        const producerMatch = s.coffees.some(c => (c.data.producer  || '').toLowerCase().includes(search));
-        const processMatch  = s.coffees.some(c => (c.data.process   || '').toLowerCase().includes(search));
-        if (!nameMatch && !coffeeMatch && !roasterMatch && !originMatch && !varietyMatch && !producerMatch && !processMatch) return false;
+        const nameMatch     = (s.name || '').toLowerCase().includes(search);
+        const coffeeMatch   = s.coffees.some(c => (c.name || '').toLowerCase().includes(search));
+        const roasterMatch  = s.coffees.some(c => (c.data?.roaster   || '').toLowerCase().includes(search));
+        const originMatch   = s.coffees.some(c => (c.data?.origin    || '').toLowerCase().includes(search));
+        const varietyMatch  = s.coffees.some(c => (c.data?.variety   || '').toLowerCase().includes(search));
+        const producerMatch = s.coffees.some(c => (c.data?.producer  || '').toLowerCase().includes(search));
+        const processMatch  = s.coffees.some(c => (c.data?.process   || '').toLowerCase().includes(search));
+        const hostMatch     = mode === 'guest' && (s.hostName || '').toLowerCase().includes(search);
+        if (!nameMatch && !coffeeMatch && !roasterMatch && !originMatch && !varietyMatch && !producerMatch && !processMatch && !hostMatch) return false;
       }
 
       // Date range filter
@@ -741,14 +834,13 @@
   // ══════════════════════════════════════════════════════════
   function setSort(col) {
     // Toggle direction if same column, otherwise default to descending for date
-    track('history_sorted', { column: col });
+    track('history_sorted', { column: col, mode });
     if (sortCol === col) {
       sortAsc = !sortAsc;
     } else {
       sortCol = col;
-      sortAsc = (col === 'name' || col === 'roaster'); // alpha cols default asc
+      sortAsc = (col === 'name' || col === 'roaster' || col === 'host'); // alpha cols default asc
     }
-    updateSortArrows();
     renderTable();
   }
 
@@ -757,12 +849,16 @@
       let av, bv;
       switch (sortCol) {
         case 'date':    av = a.date; bv = b.date; break;
-        case 'name':    av = a.name.toLowerCase(); bv = b.name.toLowerCase(); break;
+        case 'name':    av = (a.name || '').toLowerCase(); bv = (b.name || '').toLowerCase(); break;
         case 'coffees': av = a.coffees.length; bv = b.coffees.length; break;
         case 'roaster':
-          // Sort by first roaster found in the session
+          // Sort by first roaster found in the session (hosted mode only)
           av = (a.coffees[0]?.data?.roaster || '').toLowerCase();
           bv = (b.coffees[0]?.data?.roaster || '').toLowerCase();
+          break;
+        case 'host':
+          av = (a.hostName || '').toLowerCase();
+          bv = (b.hostName || '').toLowerCase();
           break;
         default: return 0;
       }
@@ -772,15 +868,33 @@
     });
   }
 
-  function updateSortArrows() {
-    const cols = ['date','name','coffees','roaster'];
-    cols.forEach(col => {
-      const th    = document.querySelector(`th[data-col="${col}"]`);
-      const arrow = document.getElementById('arrow-' + col);
-      if (!th || !arrow) return;
-      th.classList.toggle('sorted', col === sortCol);
-      arrow.textContent = col === sortCol ? (sortAsc ? '↑' : '↓') : '';
-    });
+  // Builds the <thead> row for the current mode and updates sort arrows
+  function renderTableHead() {
+    const arrow = col => sortCol === col ? (sortAsc ? '↑' : '↓') : '';
+    const cls   = col => sortCol === col ? 'sorted' : '';
+
+    const columns = mode === 'hosted' ? [
+      { col: 'date',    label: 'Date'    },
+      { col: 'name',    label: 'Session' },
+      { col: 'coffees', label: 'Coffees' },
+      { col: null,      label: 'Top flavours' },
+      { col: 'roaster', label: 'Roaster' },
+    ] : [
+      { col: 'date',    label: 'Date'          },
+      { col: 'name',    label: 'Session'       },
+      { col: 'host',    label: 'Host'          },
+      { col: 'coffees', label: 'Coffees'       },
+      { col: null,      label: 'Your flavours' },
+    ];
+
+    document.getElementById('table-head').innerHTML = `<tr>${
+      columns.map(c => c.col
+        ? `<th data-col="${c.col}" onclick="setSort('${c.col}')" class="${cls(c.col)}">
+             ${c.label} <span class="sort-arrow">${arrow(c.col)}</span>
+           </th>`
+        : `<th>${c.label}</th>`
+      ).join('')
+    }</tr>`;
   }
 
   // ══════════════════════════════════════════════════════════
@@ -788,60 +902,88 @@
   //  Main render loop — filters, sorts, then builds table rows.
   // ══════════════════════════════════════════════════════════
   function renderTable() {
+    renderTableHead();
+
     const filtered = applyFilters();
     const sorted   = sortSessions(filtered);
+    const total    = activeDataset().length;
 
-    // Update session count in header
+    // Update session count under the page title
+    const label = mode === 'hosted' ? 'hosted' : 'joined';
     document.getElementById('session-count').textContent =
-      `${sorted.length} session${sorted.length !== 1 ? 's' : ''}${filtered.length < sessions.length ? ' (filtered)' : ''}`;
+      `${sorted.length} ${label} session${sorted.length !== 1 ? 's' : ''}${filtered.length < total ? ' (filtered)' : ''}`;
 
     // Show empty state if no results — message differs based on context
-    const isEmpty = sorted.length === 0;
-    const isFiltered = filtered.length < sessions.length;
+    const isEmpty    = sorted.length === 0;
+    const isFiltered = filtered.length < total;
     document.getElementById('empty-state').classList.toggle('show', isEmpty);
     document.getElementById('session-table').style.display = isEmpty ? 'none' : 'table';
     if (isEmpty) {
-      document.querySelector('.empty-text').innerHTML = isFiltered
-        ? 'No sessions match your filters.<br>Try adjusting the search or date range.'
-        : 'No sessions yet.<br><a href="cupping.html" style="color:var(--accent);text-decoration:none">Start your first cupping →</a>';
+      let msg;
+      if (isFiltered) {
+        msg = 'No sessions match your filters.<br>Try adjusting the search or date range.';
+      } else if (mode === 'hosted') {
+        msg = 'No hosted sessions yet.<br><a href="cupping.html" style="color:var(--accent);text-decoration:none">Start your first cupping →</a>';
+      } else {
+        msg = 'No guest sessions yet.<br><span style="color:var(--mid);font-size:0.8rem">Sessions you join via a share link will appear here.</span>';
+      }
+      document.querySelector('.empty-text').innerHTML = msg;
     }
 
     const tbody = document.getElementById('table-body');
     tbody.innerHTML = sorted.map((s, i) => {
-
-      // Gather all flavours from all coffees in the session
-      const allFlavours = [...new Set(s.coffees.flatMap(c => c.data.flavours || []))];
+      // Gather all flavours from all coffees in the session (user's own in guest mode)
+      const allFlavours  = [...new Set(s.coffees.flatMap(c => c.data?.flavours || []))];
       const showFlavours = allFlavours.slice(0, 3);
       const extraCount   = allFlavours.length - showFlavours.length;
 
-      // Get roasters — deduplicated
-      const roasters = [...new Set(s.coffees.map(c => c.data.roaster).filter(Boolean))];
+      const flavoursCell = `<td class="td-flavours">
+        <div class="flavour-chips">
+          ${showFlavours.map(f => `<span class="flavour-chip">${escHtml(f)}</span>`).join('')}
+          ${extraCount > 0 ? `<span class="flavour-more">+${extraCount}</span>` : ''}
+          ${allFlavours.length === 0 ? `<span class="flavour-more" style="opacity:0.5">—</span>` : ''}
+        </div>
+      </td>`;
 
-      return `<tr onclick="openDrawer(${s.id})" style="animation-delay:${i*30}ms"
-               class="${activeDrawerId === s.id ? 'selected' : ''}">
-        <td class="td-date">${formatDate(s.date)}</td>
-        <td>
-          <div class="td-name">${escHtml(s.name)}</div>
-          ${s.coffees.length > 1 ? `<div class="td-name-sub">${s.coffees.map(c => escHtml(c.name)).join(', ')}</div>` : ''}
-        </td>
-        <td class="td-coffees">${s.coffees.length}</td>
-        <td class="td-flavours">
-          <div class="flavour-chips">
-            ${showFlavours.map(f => `<span class="flavour-chip">${escHtml(f)}</span>`).join('')}
-            ${extraCount > 0 ? `<span class="flavour-more">+${extraCount}</span>` : ''}
-          </div>
-        </td>
-        <td style="color:var(--brown);font-size:0.8rem">${roasters.join(', ') || '—'}</td>
-      </tr>`;
+      if (mode === 'hosted') {
+        const roasters = [...new Set(s.coffees.map(c => c.data?.roaster).filter(Boolean))];
+        return `<tr onclick="openDrawer('${s.id}')" style="animation-delay:${i*30}ms"
+                 class="${activeDrawerId === s.id ? 'selected' : ''}">
+          <td class="td-date">${formatDate(s.date)}</td>
+          <td>
+            <div class="td-name">${escHtml(s.name)}</div>
+            ${s.coffees.length > 1 ? `<div class="td-name-sub">${s.coffees.map(c => escHtml(c.name)).join(', ')}</div>` : ''}
+          </td>
+          <td class="td-coffees">${s.coffees.length}</td>
+          ${flavoursCell}
+          <td style="color:var(--brown);font-size:0.8rem">${roasters.join(', ') || '—'}</td>
+        </tr>`;
+      } else {
+        // Guest mode
+        return `<tr onclick="openDrawer('${s.id}')" style="animation-delay:${i*30}ms"
+                 class="${activeDrawerId === s.id ? 'selected' : ''}">
+          <td class="td-date">${formatDate(s.date)}</td>
+          <td>
+            <div class="td-name">${escHtml(s.name)}</div>
+            ${s.coffees.length > 1 ? `<div class="td-name-sub">${s.coffees.map(c => escHtml(c.name)).join(', ')}</div>` : ''}
+          </td>
+          <td style="color:var(--brown);font-size:0.8rem">${escHtml(s.hostName)}</td>
+          <td class="td-coffees">${s.coffees.length}</td>
+          ${flavoursCell}
+        </tr>`;
+      }
     }).join('');
   }
 
   // ══════════════════════════════════════════════════════════
   //  DRAWER
-  //  Slides in from the right to show full session detail.
+  //  Slides up from the bottom to show full session detail.
+  //  Branches on mode:
+  //   - hosted: full 3-tab view (your notes / guest responses / report)
+  //   - guest:  simplified single view (your own notes + host info)
   // ══════════════════════════════════════════════════════════
   async function openDrawer(id) {
-    const session = sessions.find(s => s.id === id);
+    const session = activeDataset().find(s => String(s.id) === String(id));
     if (!session) return;
 
     activeDrawerId = id;
@@ -854,16 +996,79 @@
     track('session_detail_opened', {
       session_id: id,
       coffee_count: session.coffees.length,
+      mode,
     });
 
     // Highlight selected row
     document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
     event.currentTarget.classList.add('selected');
 
+    // ────────────────────────────────────────────────
+    //  GUEST MODE — simplified drawer
+    // ────────────────────────────────────────────────
+    if (mode === 'guest') {
+      document.getElementById('drawer-title').textContent = session.name;
+      document.getElementById('drawer-meta').textContent  =
+        `${formatDate(session.date)} · Hosted by ${session.hostName} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''}`;
+
+      // Hide host-only actions
+      document.getElementById('btn-end-session').style.display    = 'none';
+      document.getElementById('btn-delete-session').style.display = 'none';
+      document.getElementById('drawer-toggle').style.display      = 'none';
+
+      // Build the body — your notes only
+      let html = `<span style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:14px">Your notes as a guest</span>`;
+
+      if (!session.coffees.length) {
+        html += `<p style="font-size:0.88rem;color:var(--mid);font-style:italic">You didn't record any notes for this session.</p>`;
+      } else {
+        session.coffees.forEach(c => {
+          const d = c.data || {};
+          html += `<div class="drawer-coffee">
+            <div class="drawer-coffee-header">
+              <span class="drawer-coffee-name">${escHtml(c.name)}</span>
+            </div>`;
+
+          if (d.flavours?.length) {
+            html += `<span class="drawer-section-label">Flavour notes</span>
+              <div class="drawer-flavour-tags">
+                ${d.flavours.map(f => `<span class="drawer-flavour-tag">${escHtml(f)}</span>`).join('')}
+              </div>`;
+          }
+
+          if (d.notes) {
+            html += `${d.flavours?.length ? '<div class="drawer-divider"></div>' : ''}
+              <span class="drawer-section-label">Tasting notes</span>
+              <p style="font-size:0.85rem;color:var(--mid);font-style:italic;line-height:1.65">${escHtml(d.notes)}</p>`;
+          }
+
+          if (!d.flavours?.length && !d.notes) {
+            html += `<p style="font-size:0.82rem;color:var(--mid);font-style:italic">No notes recorded for this coffee.</p>`;
+          }
+
+          html += `</div>`;
+        });
+      }
+
+      document.getElementById('drawer-host-content').innerHTML  = html;
+      document.getElementById('drawer-guest-content').innerHTML = '';
+      switchDrawerView('host');
+
+      document.getElementById('drawer').classList.add('open');
+      document.getElementById('drawer-overlay').classList.add('open');
+      return;
+    }
+
+    // ────────────────────────────────────────────────
+    //  HOSTED MODE — original full drawer
+    // ────────────────────────────────────────────────
     // Populate drawer header
     document.getElementById('drawer-title').textContent = session.name;
     document.getElementById('drawer-meta').textContent  =
       `${formatDate(session.date)} · ${session.coffees.length} coffee${session.coffees.length > 1 ? 's' : ''} · ${statusBadge(session.status)}${session.scheduledAt ? ' · 🕐 ' + formatScheduled(session.scheduledAt) : ''}${session.recurrence && session.recurrence !== 'none' ? ' · 🔁 ' + session.recurrence : ''}`;
+
+    // Restore host-only action buttons
+    document.getElementById('btn-delete-session').style.display = 'inline-flex';
 
     // Show End session button only for active sessions with a share token
     const endBtn = document.getElementById('btn-end-session');
@@ -1270,6 +1475,7 @@
   let deleteArmTimer = null;
 
   function deleteSession() {
+    if (mode !== 'hosted') return; // Safety: only hosted sessions can be deleted
     const btn = document.getElementById('btn-delete-session');
 
     if (!deleteArmed) {
