@@ -691,7 +691,9 @@
 
   // Fetches BOTH hosted sessions and sessions the user has joined as a guest.
   // Hosted: cupping_sessions WHERE user_id = me (excluding scheduled/cancelled/missed)
-  // Guest:  session_responses WHERE user_id = me, joined back to cupping_sessions
+  // Guest:  session_responses WHERE user_id = me, joined back to cupping_sessions.
+  //         Host names are fetched in a second query to avoid depending on a
+  //         specific FK name in the schema cache.
   async function loadSessions(userId) {
     const [hostedRes, guestRes] = await Promise.all([
       window.supabaseClient
@@ -704,13 +706,7 @@
         .order('id', { ascending: false }),
       window.supabaseClient
         .from('session_responses')
-        .select(`
-          id, guest_name, coffees, created_at, share_token,
-          session:cupping_sessions!inner (
-            id, session_name, session_date, user_id, status,
-            host:profiles!cupping_sessions_user_id_fkey ( name )
-          )
-        `)
+        .select('id, guest_name, coffees, created_at, share_token')
         .eq('user_id', userId)
         .order('created_at', { ascending: false }),
     ]);
@@ -739,21 +735,58 @@
       console.error('Error loading guest sessions:', guestRes.error.message);
       guestSessions = [];
     } else {
-      guestSessions = (guestRes.data || [])
-        .filter(r => r.session) // safety — skip if host session was deleted
-        .map(r => ({
-          id:          'g_' + r.id, // prefix so IDs don't collide with hosted
-          responseId:  r.id,
-          name:        r.session.session_name,
-          date:        r.session.session_date,
-          hostSessionId: r.session.id,
-          hostName:    r.session.host?.name || 'Unknown host',
-          hostStatus:  r.session.status,
-          coffees:     r.coffees || [],   // the guest's (= user's) own responses
-          submittedAt: r.created_at,
-          guestName:   r.guest_name,
-          shareToken:  r.share_token,
-        }));
+      const rawResponses = guestRes.data || [];
+
+      // Batch-fetch the parent sessions by share_token, then the host profiles
+      const tokens = [...new Set(rawResponses.map(r => r.share_token).filter(Boolean))];
+      const sessionByToken = {};
+      const hostNameById   = {};
+
+      if (tokens.length) {
+        const { data: parentSessions, error: parentErr } = await window.supabaseClient
+          .from('cupping_sessions')
+          .select('id, session_name, session_date, user_id, status, share_token')
+          .in('share_token', tokens);
+
+        if (parentErr) {
+          console.warn('Could not fetch parent sessions:', parentErr.message);
+        } else {
+          (parentSessions || []).forEach(s => { sessionByToken[s.share_token] = s; });
+
+          // Fetch host names from profiles
+          const hostIds = [...new Set((parentSessions || []).map(s => s.user_id).filter(Boolean))];
+          if (hostIds.length) {
+            const { data: profiles, error: profErr } = await window.supabaseClient
+              .from('profiles')
+              .select('user_id, name')
+              .in('user_id', hostIds);
+            if (profErr) {
+              console.warn('Could not fetch host names:', profErr.message);
+            } else {
+              (profiles || []).forEach(p => { hostNameById[p.user_id] = p.name; });
+            }
+          }
+        }
+      }
+
+      guestSessions = rawResponses
+        .filter(r => sessionByToken[r.share_token]) // skip responses whose host session was deleted
+        .map(r => {
+          const parent = sessionByToken[r.share_token];
+          return {
+            id:            'g_' + r.id,
+            responseId:    r.id,
+            name:          parent.session_name,
+            date:          parent.session_date,
+            hostSessionId: parent.id,
+            hostName:      hostNameById[parent.user_id] || 'Unknown host',
+            hostStatus:    parent.status,
+            coffees:       r.coffees || [],
+            submittedAt:   r.created_at,
+            guestName:     r.guest_name,
+            shareToken:    r.share_token,
+          };
+        });
     }
 
     // Update counts in the toggle
