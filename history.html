@@ -5,56 +5,38 @@
   ═══════════════════════════════════════════════════════════════
 
   PURPOSE:
-    A logged-in user's full cupping history in one place.
-    Designed for density and scannability — especially useful
-    for quality control (e.g. tracking a coffee across batches).
-
-  DATA:
-    Currently uses MOCK_SESSIONS[] defined in the script block.
-    When the backend is ready, replace loadSessions() with a real
-    API call and populate sessions[] from the response.
-    Session objects must match the shape defined in MOCK_SESSIONS.
+    A logged-in user's full cupping history, split between sessions
+    they hosted and sessions they joined as a guest.
 
   PAGE LAYOUT:
-    TOP NAV       Sticky nav with logo and account link
+    TOP NAV       Sticky nav with mobile hamburger menu
     HEADER        Page title, session count, "New session" button
-    FILTER BAR    Search + filter controls (name, date, roaster)
-    SESSION TABLE Dense table showing one row per session.
-                  Columns: Date, Session Name, Coffees, Avg Score,
-                  Top Flavours, Roaster. Sortable by column header.
-    DRAWER        Slide-in panel from the right showing full session
-                  detail when a row is tapped. Closes on overlay click
-                  or the × button.
+    MODE TOGGLE   Pill toggle: Hosted / Joined — swaps the dataset
+    FILTER BAR    Text search + date range; mobile sort dropdown
+    SESSION TABLE Sortable table (hosted: Date / Session / Coffees /
+                  Top flavours / Roaster. guest: Date / Session /
+                  Host / Coffees / Your flavours)
+    CARD LIST     Mobile-only stacked card view (≤640px)
+    DRAWER        Slide-up detail panel with three tabs in hosted
+                  mode (Your notes / Guest responses / Report) and
+                  a simplified single view in guest mode
 
   KEY JAVASCRIPT:
-    MOCK_SESSIONS[]   Sample data. Replace with API response.
-    loadSessions()    Populates sessions[] — swap for real fetch here.
-    renderTable()     Filters, sorts and renders the table rows.
-    applyFilters()    Reads all filter inputs and returns filtered array.
-    sortSessions()    Sorts the filtered array by the active column.
-    openDrawer(id)    Finds session by id, builds and slides in the drawer.
-    closeDrawer()     Hides the drawer and overlay.
-    formatDate()      Formats ISO date strings for display.
-    avgScore()        Computes average from a scores object.
-
-  FILTER BEHAVIOUR:
-    All filters are AND'd together — a session must pass every
-    active filter to appear. Filters debounce 200ms on text input.
-
-  SORTING:
-    Click any column header to sort by that column.
-    Click again to reverse. Active sort column is highlighted.
+    loadSessions()       Fetches hosted + guest sessions in parallel
+    applyFilters()       Applies search + date filters
+    sortSessions()       Sorts the filtered array
+    renderTable()        Builds table + mobile card list
+    setMode(mode)        Switches between 'hosted' and 'guest'
+    openDrawer(id)       Opens the detail drawer
+    buildReport()        Renders the per-coffee radar charts
 
   FUTURE / TODO:
-    - Replace MOCK_SESSIONS with real API fetch in loadSessions().
-    - Add export to CSV / PDF button.
-    - Add a "Compare sessions" mode — select two rows, open a
-      side-by-side comparison drawer.
-    - Pagination or infinite scroll for large history sets.
-    - "Starred" sessions for quick access to key reference batches.
+    - Export to CSV / PDF
+    - "Compare sessions" mode: select two rows, side-by-side view
+    - Pagination or infinite scroll for large history sets
+    - "Starred" sessions for quick access to key reference batches
   ═══════════════════════════════════════════════════════════════
 -->
-<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1764,7 +1746,6 @@
     document.getElementById('btn-end-session').style.display = 'none';
   }
 
-  // Placeholder — will navigate to cupping.html pre-populated
   // Two-tap delete — first tap arms the button, second tap executes deletion
   let deleteArmed = false;
   let deleteArmTimer = null;
@@ -1819,10 +1800,6 @@
       `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
     closeDrawer();
     renderTable();
-  }
-
-  function reopenSession() {
-    alert('Re-cupping will be available once sessions are saved to your account.');
   }
 
   // Builds a single key/value row for the drawer
