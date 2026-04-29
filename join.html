@@ -39,6 +39,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="config.js"></script>
+  <script src="shared.js"></script>
   <style>
     :root {
       --bg:      #e8e4d9;
@@ -445,16 +446,8 @@
   let scalePicks    = [];    // per-coffee scale selections: array of objects
 
 
-  const WHEEL = [
-    { id:'fruity',  emoji:'🍓', name:'Fruity',    specifics:['Blackberry','Raspberry','Blueberry','Strawberry','Lemon','Lime','Orange','Grapefruit','Peach','Apricot','Cherry','Mango','Pineapple','Passion Fruit','Raisin','Prune'] },
-    { id:'floral',  emoji:'🌸', name:'Floral',    specifics:['Jasmine','Rose','Lavender','Orange Blossom','Elderflower','Black Tea','Chamomile'] },
-    { id:'sweet',   emoji:'🍯', name:'Sweet',     specifics:['Vanilla','Cream','Caramel','Toffee','Honey','Brown Sugar','Maple Syrup','Dark Chocolate','Milk Chocolate','Cocoa'] },
-    { id:'nutty',   emoji:'🥜', name:'Nutty',     specifics:['Almond','Hazelnut','Peanut','Walnut','Pecan','Cocoa Powder'] },
-    { id:'spices',  emoji:'🌶', name:'Spices',    specifics:['Cinnamon','Cardamom','Nutmeg','Ginger','Clove','Pepper'] },
-    { id:'roasted', emoji:'🔥', name:'Roasted',   specifics:['Tobacco','Cedar','Smoky','Ashy','Dark Roast','Brown Roast'] },
-    { id:'green',   emoji:'🌿', name:'Green',     specifics:['Grassy','Vegetal','Olive Oil','Raw','Green Tea'] },
-    { id:'other',   emoji:'✨', name:'Other',     specifics:['Winey','Fermented','Musty','Earthy','Papery','Phenolic'] },
-  ];
+  // ── DATA ──
+  // WHEEL and SCALE_FIELDS are defined in shared.js.
 
   // ── INIT ──
   // ── INIT ──
@@ -660,20 +653,15 @@
     // Roast level select — host only
 
     // Scale fields — qualitative pill selectors
-    const SCALE_FIELDS = {
-      body:      { label:'Body',       options:['None','Light','Round','Full','Syrupy'] },
-      dry_aroma: { label:'Dry Aroma',  options:['Faint','Delicate','Moderate','Intense','Complex'] },
-      wet_aroma: { label:'Wet Aroma',  options:['Faint','Delicate','Moderate','Intense','Complex'] },
-      aftertaste:{ label:'Aftertaste', options:['Short','Medium','Long','Lingering'] },
-    };
-    Object.entries(SCALE_FIELDS).forEach(([id, field]) => {
-      if (params.has(id)) {
+    // SCALE_FIELDS comes from shared.js (array of {id, label, options})
+    SCALE_FIELDS.forEach(field => {
+      if (params.has(field.id)) {
         const pillHtml = field.options.map(o =>
-          `<button type="button" class="guest-scale-pill" data-group="${id}-${idx}" data-val="${o}" onclick="selectScalePill(this)">${o}</button>`
+          `<button type="button" class="guest-scale-pill" data-group="${field.id}-${idx}" data-val="${o}" onclick="selectScalePill(this)">${o}</button>`
         ).join('');
         html += `<div class="form-group">
           <label class="form-label">${field.label}</label>
-          <div class="scale-pill-group" id="${id}-${idx}">${pillHtml}</div>
+          <div class="scale-pill-group" id="${field.id}-${idx}">${pillHtml}</div>
         </div>`;
       }
     });
@@ -873,12 +861,7 @@
   let resultsCharts = {};
   let resultsIsEnded = false;
 
-  const SCALE_FIELDS = [
-    { id:'body',       label:'Body',      options:['None','Light','Round','Full','Syrupy'] },
-    { id:'dry_aroma',  label:'Dry aroma', options:['Faint','Delicate','Moderate','Intense','Complex'] },
-    { id:'wet_aroma',  label:'Wet aroma', options:['Faint','Delicate','Moderate','Intense','Complex'] },
-    { id:'aftertaste', label:'Aftertaste',options:['Short','Medium','Long','Lingering'] },
-  ];
+  // SCALE_FIELDS is defined in shared.js as window.SCALE_FIELDS
 
   async function showResults() {
     document.getElementById('state-results').style.display = 'block';

@@ -31,12 +31,14 @@
       row in Supabase with final data and sets is_active=false.
 
   KEY DATA STRUCTURES:
-    ALL_PARAMS[]   Defines every possible field. Each param has:
-                   id, label, type (text/select/flavours/textarea),
-                   and options or placeholder where relevant.
+    ALL_PARAMS[]   Defined in shared.js. Every possible field. Each
+                   param has: id, label, type (text/select/flavours/
+                   textarea/scale), and options or placeholder where
+                   relevant.
 
-    WHEEL[]        Flavour wheel data. Each family has an id, emoji,
-                   name, and array of specific flavour chips.
+    WHEEL[]        Defined in shared.js. Flavour wheel data. Each
+                   family has an id, emoji, name, and array of specific
+                   flavour chips.
 
     coffees[]      Runtime array of { name, data:{} } objects.
                    data holds everything entered for that coffee
@@ -399,6 +401,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="config.js"></script>
+  <script src="shared.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.json" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -637,43 +640,10 @@
 
   // ══════════════════════════════════════════════════════════
   //  DATA DEFINITIONS
-  //  These arrays define what the app knows about. Edit here
-  //  to add new fields or flavours.
+  //  ALL_PARAMS and WHEEL are defined in shared.js so they can
+  //  be reused by join.html and history.html. To add a new field
+  //  or flavour, edit shared.js — it's the single source of truth.
   // ══════════════════════════════════════════════════════════
-
-  // ALL_PARAMS defines every possible field a user can capture.
-  // 'type' controls how the field is rendered in buildPanelFields():
-  //   text     → plain text input
-  //   select   → dropdown (options array required)
-  //   flavours → the interactive flavour wheel picker
-  //   textarea → multi-line free text
-  const ALL_PARAMS = [
-    // ── Sensory params only — metadata (origin, variety etc.) is set per-coffee at setup ──
-    // ── Default ON ──
-    { id:'flavours',  label:'Flavour Notes',type:'flavours' },
-    { id:'notes',     label:'Tasting Notes',type:'textarea',placeholder:'Free-form impressions...' },
-    // ── Default OFF ──
-    { id:'body',      label:'Body',         type:'scale', options:['None','Light','Round','Full','Syrupy'] },
-    { id:'dry_aroma', label:'Dry Aroma',    type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
-    { id:'wet_aroma', label:'Wet Aroma',    type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
-    { id:'aftertaste',label:'Aftertaste',   type:'scale', options:['Short','Medium','Long','Lingering'] },
-  ];
-
-  // WHEEL defines the flavour picker structure.
-  // Each family has an id, emoji, display name, and a flat array
-  // of specific flavour chips shown when the family is expanded.
-  // To add a flavour: push a string into the relevant specifics array.
-  // To add a family: push a new object into WHEEL.
-  const WHEEL = [
-    { id:'fruity',  emoji:'🍓', name:'Fruity',         specifics:['Blackberry','Raspberry','Blueberry','Strawberry','Lemon','Lime','Orange','Grapefruit','Peach','Apricot','Cherry','Mango','Pineapple','Passion Fruit','Raisin','Prune'] },
-    { id:'floral',  emoji:'🌸', name:'Floral',         specifics:['Jasmine','Rose','Lavender','Orange Blossom','Elderflower','Black Tea','Chamomile'] },
-    { id:'sweet',   emoji:'🍯', name:'Sweet',          specifics:['Vanilla','Cream','Caramel','Toffee','Honey','Brown Sugar','Maple Syrup','Dark Chocolate','Milk Chocolate','Cocoa'] },
-    { id:'nutty',   emoji:'🥜', name:'Nutty',          specifics:['Almond','Hazelnut','Peanut','Walnut','Pecan','Cocoa Powder'] },
-    { id:'spices',  emoji:'🌶', name:'Spices',         specifics:['Cinnamon','Cardamom','Nutmeg','Ginger','Clove','Pepper'] },
-    { id:'roasted', emoji:'🔥', name:'Roasted',        specifics:['Malt','Toast','Biscuit','Smoky','Ashy','Bitter'] },
-    { id:'veggie',  emoji:'🌿', name:'Veggie / Earthy',specifics:['Grass','Green Tea','Herb','Mushroom','Earthy','Woody','Cedar'] },
-    { id:'sour',    emoji:'🍋', name:'Sour / Fermented',specifics:['Citric','Bright','Sour','Tangy','Winey','Yeasty','Funky'] },
-  ];
 
 
 
@@ -722,10 +692,6 @@
         window.location.href = 'signup.html';
         return;
       }
-      track('page_view', { page: 'cupping' });
-      window.supabaseClient.auth.onAuthStateChange((event) => {
-        if (event === 'SIGNED_OUT') window.location.href = 'index.html';
-      });
 
       // Check for ?token= param first — host joining their own live session to cup
       const urlToken = new URLSearchParams(window.location.search).get('token');

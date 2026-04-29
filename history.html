@@ -659,6 +659,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="config.js"></script>
+  <script src="shared.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.json" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -1473,12 +1474,7 @@
     const allResponses = [hostAsResp, ...responses];
     const container    = document.getElementById('drawer-report-content');
 
-    const SCALE_FIELDS = [
-      { id:'body',       label:'Body',      options:['None','Light','Round','Full','Syrupy'] },
-      { id:'dry_aroma',  label:'Dry aroma', options:['Faint','Delicate','Moderate','Intense','Complex'] },
-      { id:'wet_aroma',  label:'Wet aroma', options:['Faint','Delicate','Moderate','Intense','Complex'] },
-      { id:'aftertaste', label:'Aftertaste',options:['Short','Medium','Long','Lingering'] },
-    ];
+    // SCALE_FIELDS is global (defined in shared.js)
 
     // ── Stats ──
     const statHtml = `
@@ -1622,12 +1618,7 @@
     const canvas = document.getElementById('report-radar');
     if (!canvas) return;
 
-    const SCALE_FIELDS = [
-      { id:'body',       label:'Body',       options:['None','Light','Round','Full','Syrupy'] },
-      { id:'dry_aroma',  label:'Dry aroma',  options:['Faint','Delicate','Moderate','Intense','Complex'] },
-      { id:'wet_aroma',  label:'Wet aroma',  options:['Faint','Delicate','Moderate','Intense','Complex'] },
-      { id:'aftertaste', label:'Aftertaste', options:['Short','Medium','Long','Lingering'] },
-    ];
+    // SCALE_FIELDS is global (defined in shared.js)
     const COLORS = ['#e8e4d9','#c9a84c','#8faa8b','#5dcaa5'];
 
     const datasets = coffees.map((cf, ci) => {
