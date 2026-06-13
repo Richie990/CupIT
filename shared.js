@@ -4,43 +4,77 @@
   ═══════════════════════════════════════════════════════════════
 
   PURPOSE:
-    Single source of truth for the cupping vocabulary used across
-    the app. Previously these arrays were duplicated in cupping.html,
-    join.html and history.html, which meant changes had to be made
-    in 2–4 places in lockstep.
+    Single source of truth for the cupping vocabulary and the
+    user's cupping preferences (presets).
 
   USAGE:
-    Every page that uses any of these globals loads this file via:
+    Loaded on every page after config.js:
+      <script src="config.js"></script>
       <script src="shared.js"></script>
-    Load order is: supabase-js → config.js → shared.js → page script.
-    The values are exposed on `window` so they are accessible from
-    any subsequent script without imports.
+    Globals on `window`, accessible from any subsequent script.
 
   WHAT'S DEFINED:
-    window.WHEEL          The flavour wheel — families and specifics.
-    window.ALL_PARAMS     Every field a cupper can capture — the
-                          master list of sensory params.
-    window.SCALE_FIELDS   Derived from ALL_PARAMS: just the scale-type
-                          fields (Body, Dry/Wet Aroma, Aftertaste).
-    window.DEFAULT_CUPPING_DEFAULTS
-                          The factory-default cupping profile. Used
-                          as a fallback when a user has no saved
-                          defaults yet.
-    window.loadCuppingDefaults(userId)
-                          Async helper that returns the user's saved
-                          defaults from profiles.cupping_defaults, or
-                          DEFAULT_CUPPING_DEFAULTS if none exist.
+    Catalog (the vocabulary):
+      window.WHEEL              — flavour wheel families + specifics
+      window.ALL_PARAMS         — every attribute a cupper can capture
+      window.SCALE_FIELDS       — derived: just the scale-type attributes
 
-  TO ADD A NEW SCALE FIELD:
-    Append to ALL_PARAMS with type:'scale' and an options array.
-    SCALE_FIELDS picks it up automatically.
+    Presets (the configurations):
+      window.SYSTEM_PRESETS     — built-in presets (SCA, QC, Casual)
+      window.DEFAULT_PRESET_ID  — id of the system preset used when a
+                                  user has nothing saved (currently 'casual')
+      window.loadPresets(userId)
+                                — returns { default_id, presets: [...] }
+                                  with system presets merged in
+      window.savePresets(userId, data)
+                                — writes back to profiles.cupping_defaults
+      window.getActivePreset(presetsData)
+                                — returns the currently-default preset
+      window.applyPresetGlobals(preset)
+                                — mutates window.WHEEL, ALL_PARAMS,
+                                  SCALE_FIELDS to match a preset's overrides
 
-  TO ADD A NEW FLAVOUR FAMILY:
-    Push a new object into WHEEL with id, emoji, name, specifics.
+  BACKWARDS-COMPAT HELPERS (Phase 1/2/3):
+    window.DEFAULT_CUPPING_DEFAULTS, window.loadCuppingDefaults,
+    window.saveCuppingDefaults — kept working so the existing
+    cupping.html and account.html editor keep functioning until
+    Phase 4C migrates them. Internally these now operate on the
+    user's "default preset" within the new multi-preset shape.
+
+  ATTRIBUTE SCHEMA:
+    Each entry in ALL_PARAMS has:
+      id           : stable key
+      label        : display name
+      type         : 'flavours' | 'textarea' | 'scale'
+      options      : pill labels (for scale)
+      placeholder  : placeholder text (for textarea)
+
+  PRESETS ADD A 'presentation' LAYER:
+    Inside a preset, each scale attribute gets per-preset overrides:
+      presentation : 'pills' | 'slider'
+      options      : custom pill labels (pills mode)
+      scoreMin     : numeric lower bound (slider, or hidden score for pills)
+      scoreMax     : numeric upper bound
+      scoreStep    : numeric increment (typically 0.25 for SCA-style)
+    Pills use equal-spaced hidden scores between scoreMin and scoreMax.
+
+  DATA STORAGE FOR A CUPPED ATTRIBUTE:
+    Whatever the presentation, the stored value is always numeric:
+      { value: 7.33, label: 'Bright' }   (pills mode)
+      { value: 8.5 }                      (slider mode)
+    label is only present for pill-mode entries.
+
+  TO ADD A NEW ATTRIBUTE:
+    Append to ALL_PARAMS. Choose a sensible default presentation +
+    score range in the preset definitions where you want it.
   ═══════════════════════════════════════════════════════════════
 */
 
-// ── FLAVOUR WHEEL ──
+
+// ═══════════════════════════════════════════════════════════════
+//  1. CATALOG — the vocabulary every preset draws from
+// ═══════════════════════════════════════════════════════════════
+
 window.WHEEL = [
   { id:'fruity',  emoji:'🍓', name:'Fruity',          specifics:['Blackberry','Raspberry','Blueberry','Strawberry','Lemon','Lime','Orange','Grapefruit','Peach','Apricot','Cherry','Mango','Pineapple','Passion Fruit','Raisin','Prune'] },
   { id:'floral',  emoji:'🌸', name:'Floral',          specifics:['Jasmine','Rose','Lavender','Orange Blossom','Elderflower','Black Tea','Chamomile'] },
@@ -52,56 +86,167 @@ window.WHEEL = [
   { id:'sour',    emoji:'🍋', name:'Sour / Fermented',specifics:['Citric','Bright','Sour','Tangy','Winey','Yeasty','Funky'] },
 ];
 
-// ── ALL CUPPING PARAMS ──
+// All attributes the app understands. Presets pick which ones to enable
+// and how to present them (pills vs slider, custom score ranges, etc.).
+// Adding a new attribute here makes it available everywhere; it won't be
+// shown to users unless a preset enables it.
 window.ALL_PARAMS = [
   { id:'flavours',  label:'Flavour Notes', type:'flavours' },
   { id:'notes',     label:'Tasting Notes', type:'textarea', placeholder:'Free-form impressions...' },
-  { id:'body',      label:'Body',          type:'scale',    options:['None','Light','Round','Full','Syrupy'] },
-  { id:'dry_aroma', label:'Dry Aroma',     type:'scale',    options:['Faint','Delicate','Moderate','Intense','Complex'] },
-  { id:'wet_aroma', label:'Wet Aroma',     type:'scale',    options:['Faint','Delicate','Moderate','Intense','Complex'] },
-  { id:'aftertaste',label:'Aftertaste',    type:'scale',    options:['Short','Medium','Long','Lingering'] },
+
+  { id:'fragrance', label:'Fragrance',  type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
+  { id:'dry_aroma', label:'Dry Aroma',  type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
+  { id:'wet_aroma', label:'Wet Aroma',  type:'scale', options:['Faint','Delicate','Moderate','Intense','Complex'] },
+  { id:'acidity',   label:'Acidity',    type:'scale', options:['Low','Mild','Bright','Sharp','Vibrant'] },
+  { id:'sweetness', label:'Sweetness',  type:'scale', options:['Subtle','Balanced','Pronounced','Honeyed','Syrupy'] },
+  { id:'body',      label:'Body',       type:'scale', options:['None','Light','Round','Full','Syrupy'] },
+  { id:'balance',   label:'Balance',    type:'scale', options:['Disjointed','Acceptable','Harmonious','Complete'] },
+  { id:'aftertaste',label:'Aftertaste', type:'scale', options:['Short','Medium','Long','Lingering'] },
+  { id:'overall',   label:'Overall',    type:'scale', options:['Poor','Fair','Good','Excellent','Outstanding'] },
 ];
 
-// ── SCALE FIELDS (derived) ──
 window.SCALE_FIELDS = window.ALL_PARAMS
   .filter(p => p.type === 'scale')
   .map(p => ({ id: p.id, label: p.label, options: p.options }));
 
 
 // ═══════════════════════════════════════════════════════════════
-//  CUPPING DEFAULTS (Phase 1 — added for per-user customisation)
+//  2. SYSTEM PRESETS — built-in, read-only
 // ═══════════════════════════════════════════════════════════════
 
-// ── DEFAULT_CUPPING_DEFAULTS ──
-// The factory-default cupping profile, used when a user hasn't
-// customised anything yet. Mirrors the current hard-coded behaviour
-// of cupping.html so nothing changes for users with no profile data.
-//
-// Shape:
-//   activeParams : array of ALL_PARAMS ids that should be ON by default
-//   passes       : number of multi-pass evaluations (1 = single pass)
-//   wheel        : custom flavour wheel (same shape as window.WHEEL).
-//                  null means "use the global WHEEL".
-//   scales       : per-scale overrides keyed by param id.
-//                  e.g. { body: ['Light','Medium','Heavy'] }
-//                  null/missing means "use the option list from ALL_PARAMS".
-window.DEFAULT_CUPPING_DEFAULTS = {
-  activeParams: ['flavours', 'notes'], // matches cupping.html's current default
-  passes:       1,
-  wheel:        null, // null = use the global WHEEL
-  scales:       {},   // empty = no overrides
+window.SYSTEM_PRESETS = [
+  {
+    id:           'system:casual',
+    name:         'Casual / Quick',
+    description:  'The lightest possible cupping. Pills only, no scores. Great for casual tasting with friends or fast quality checks where speed is the priority.',
+    system:       true,
+    activeParams: ['flavours','notes'],
+    passes:       1,
+    wheel:        null,
+    scales:       {},
+  },
+  {
+    id:           'system:qc',
+    name:         'QC / Production',
+    description:  'Daily quality-control cupping. Covers the essentials a roaster needs to confirm a batch is on profile, without slowing down. Pills with hidden scores so you can still compare batches if you want.',
+    system:       true,
+    activeParams: ['flavours','notes','acidity','body','aftertaste'],
+    passes:       1,
+    wheel:        null,
+    scales: {
+      acidity:    { presentation:'pills', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+      body:       { presentation:'pills', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+      aftertaste: { presentation:'pills', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+    },
+  },
+  {
+    id:           'system:sca',
+    name:         'SCA Q-Grader',
+    description:  'Specialty Coffee Association cupping protocol. Eight attributes scored 6.00–10.00 in 0.25 increments. Three temperature passes (hot ~70°C, warm ~55°C, cool ~38°C). Designed for trained Q-graders evaluating samples for purchase or scoring competition coffees.',
+    system:       true,
+    activeParams: ['flavours','notes','fragrance','acidity','sweetness','body','balance','aftertaste','overall'],
+    passes:       3,
+    wheel:        null,
+    scales: {
+      fragrance:  { presentation:'slider', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+      acidity:    { presentation:'slider', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+      sweetness:  { presentation:'slider', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+      body:       { presentation:'slider', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+      balance:    { presentation:'slider', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+      aftertaste: { presentation:'slider', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+      overall:    { presentation:'slider', scoreMin:6, scoreMax:10, scoreStep:0.25 },
+    },
+  },
+];
+
+window.DEFAULT_PRESET_ID = 'system:casual';
+
+
+// ═══════════════════════════════════════════════════════════════
+//  3. SCORE HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+// Equal-spaced score for the pill at index `idx` among `count` pills
+// on a [min, max] range.
+window.pillScore = function(idx, count, min, max) {
+  if (count <= 1) return min;
+  return min + (idx / (count - 1)) * (max - min);
+};
+
+// Effective config for an attribute under a given preset: merges the
+// catalog (ALL_PARAMS) defaults with the preset's per-attribute overrides.
+window.resolveAttr = function(preset, attrId) {
+  const catalog = window.ALL_PARAMS.find(p => p.id === attrId);
+  if (!catalog) return null;
+  const override = preset.scales?.[attrId] || {};
+  return {
+    id:           attrId,
+    label:        catalog.label,
+    type:         catalog.type,
+    options:      override.options    || catalog.options,
+    placeholder:  catalog.placeholder,
+    presentation: override.presentation || 'pills',
+    scoreMin:     override.scoreMin   ?? 6,
+    scoreMax:     override.scoreMax   ?? 10,
+    scoreStep:    override.scoreStep  ?? 0.25,
+  };
 };
 
 
-// ── loadCuppingDefaults(userId) ──
-// Fetches the user's saved cupping defaults from profiles.cupping_defaults.
-// Returns DEFAULT_CUPPING_DEFAULTS if the column is null, the row is missing,
-// the column doesn't exist yet (early dev), or the fetch fails.
-// Always returns a complete object — caller never needs to null-check fields.
-window.loadCuppingDefaults = async function(userId) {
-  // Fallback: factory defaults (deep-cloned so callers can mutate safely)
-  const fallback = () => JSON.parse(JSON.stringify(window.DEFAULT_CUPPING_DEFAULTS));
+// ═══════════════════════════════════════════════════════════════
+//  4. PRESET LOAD / SAVE
+// ═══════════════════════════════════════════════════════════════
 
+function migrateLegacyShape(legacy) {
+  if (legacy && Array.isArray(legacy.presets)) return legacy;
+  if (legacy && (legacy.activeParams || legacy.passes || legacy.wheel || legacy.scales)) {
+    const migratedId = 'user_' + Math.random().toString(36).slice(2, 10);
+
+    // Convert old-shape scales (just option arrays keyed by id) into the
+    // new wrapped shape with presentation + score range.
+    const wrappedScales = {};
+    if (legacy.scales && typeof legacy.scales === 'object') {
+      Object.entries(legacy.scales).forEach(([id, opts]) => {
+        if (Array.isArray(opts) && opts.length >= 2) {
+          wrappedScales[id] = {
+            presentation: 'pills',
+            options:      opts,
+            scoreMin:     6,
+            scoreMax:     10,
+            scoreStep:    0.25,
+          };
+        }
+      });
+    }
+
+    return {
+      default_id: migratedId,
+      presets: [{
+        id:           migratedId,
+        name:         'My setup',
+        description:  '',
+        system:       false,
+        activeParams: legacy.activeParams || ['flavours','notes'],
+        passes:       legacy.passes       || 1,
+        wheel:        legacy.wheel        || null,
+        scales:       wrappedScales,
+      }],
+    };
+  }
+  return { default_id: window.DEFAULT_PRESET_ID, presets: [] };
+}
+
+function mergeSystemPresets(data) {
+  const userPresets = (data.presets || []).filter(p => !String(p.id).startsWith('system:'));
+  const systems     = JSON.parse(JSON.stringify(window.SYSTEM_PRESETS));
+  return {
+    default_id: data.default_id || window.DEFAULT_PRESET_ID,
+    presets:    [...userPresets, ...systems],
+  };
+}
+
+window.loadPresets = async function(userId) {
+  const fallback = () => mergeSystemPresets({ default_id: window.DEFAULT_PRESET_ID, presets: [] });
   if (!userId || !window.supabaseClient) return fallback();
 
   try {
@@ -110,42 +255,149 @@ window.loadCuppingDefaults = async function(userId) {
       .select('cupping_defaults')
       .eq('user_id', userId)
       .single();
-
     if (error) {
-      // Could be: column doesn't exist (PGRST204), no profile row, or RLS.
-      // Any of these → quietly fall back to factory defaults.
-      console.warn('[loadCuppingDefaults] falling back to factory:', error.message);
+      console.warn('[loadPresets] falling back:', error.message);
       return fallback();
     }
-
-    // Null column or empty object → factory
     if (!data || !data.cupping_defaults) return fallback();
-
-    // Merge stored defaults with factory shape so any newly-added keys are
-    // automatically populated for users with older saved data. This lets us
-    // add new fields to DEFAULT_CUPPING_DEFAULTS later without migrations.
-    return Object.assign(fallback(), data.cupping_defaults);
+    return mergeSystemPresets(migrateLegacyShape(data.cupping_defaults));
   } catch (e) {
-    console.warn('[loadCuppingDefaults] threw:', e.message);
+    console.warn('[loadPresets] threw:', e.message);
     return fallback();
   }
 };
 
-
-// ── saveCuppingDefaults(userId, defaults) ──
-// Writes the user's cupping defaults back to profiles.cupping_defaults.
-// Returns { ok: true } on success or { ok: false, error: '...' } on failure.
-window.saveCuppingDefaults = async function(userId, defaults) {
-  if (!userId)               return { ok: false, error: 'No user id' };
+window.savePresets = async function(userId, data) {
+  if (!userId)                return { ok: false, error: 'No user id' };
   if (!window.supabaseClient) return { ok: false, error: 'No supabase client' };
+
+  const userPresets = (data.presets || []).filter(p => !String(p.id).startsWith('system:'));
+  const payload = {
+    default_id: data.default_id || window.DEFAULT_PRESET_ID,
+    presets:    userPresets,
+  };
 
   try {
     const { error } = await window.supabaseClient
       .from('profiles')
-      .update({ cupping_defaults: defaults })
+      .update({ cupping_defaults: payload })
       .eq('user_id', userId);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+};
+
+window.getActivePreset = function(data) {
+  if (!data || !data.presets?.length) return null;
+  return data.presets.find(p => p.id === data.default_id) || data.presets[0];
+};
+
+window.applyPresetGlobals = function(preset) {
+  if (!preset) return;
+  if (Array.isArray(preset.wheel) && preset.wheel.length > 0) {
+    window.WHEEL = preset.wheel;
+  }
+  if (preset.scales && typeof preset.scales === 'object') {
+    Object.entries(preset.scales).forEach(([id, override]) => {
+      if (!override.options || override.options.length < 2) return;
+      const p = window.ALL_PARAMS.find(x => x.id === id && x.type === 'scale');
+      if (p) p.options = override.options;
+    });
+  }
+  window.SCALE_FIELDS = window.ALL_PARAMS
+    .filter(p => p.type === 'scale')
+    .map(p => ({ id: p.id, label: p.label, options: p.options }));
+};
+
+
+// ═══════════════════════════════════════════════════════════════
+//  5. BACKWARDS-COMPAT (Phase 1/2/3 helpers)
+// ═══════════════════════════════════════════════════════════════
+// loadCuppingDefaults / saveCuppingDefaults present the OLD single-
+// object shape to existing callers (cupping.html, account.html editor).
+// Internally they read from / write to the user's default preset
+// within the new multi-preset shape.
+
+window.DEFAULT_CUPPING_DEFAULTS = {
+  activeParams: ['flavours', 'notes'],
+  passes:       1,
+  wheel:        null,
+  scales:       {},
+};
+
+function legacyScales(scales) {
+  const out = {};
+  if (!scales) return out;
+  Object.entries(scales).forEach(([id, override]) => {
+    if (Array.isArray(override.options) && override.options.length >= 2) {
+      out[id] = override.options;
+    }
+  });
+  return out;
+}
+
+window.loadCuppingDefaults = async function(userId) {
+  const fallback = () => JSON.parse(JSON.stringify(window.DEFAULT_CUPPING_DEFAULTS));
+  try {
+    const presets = await window.loadPresets(userId);
+    const active  = window.getActivePreset(presets);
+    if (!active) return fallback();
+    return {
+      activeParams: active.activeParams || ['flavours','notes'],
+      passes:       active.passes       || 1,
+      wheel:        active.wheel        || null,
+      scales:       legacyScales(active.scales),
+    };
+  } catch (e) {
+    console.warn('[loadCuppingDefaults] falling back:', e.message);
+    return fallback();
+  }
+};
+
+window.saveCuppingDefaults = async function(userId, legacy) {
+  if (!userId) return { ok: false, error: 'No user id' };
+
+  try {
+    const presets = await window.loadPresets(userId);
+    let active    = window.getActivePreset(presets);
+
+    if (!active || active.system) {
+      const newId = 'user_' + Math.random().toString(36).slice(2, 10);
+      active = {
+        id:           newId,
+        name:         'My setup',
+        description:  '',
+        system:       false,
+        activeParams: legacy.activeParams || ['flavours','notes'],
+        passes:       legacy.passes       || 1,
+        wheel:        legacy.wheel        || null,
+        scales:       {},
+      };
+      presets.presets.unshift(active);
+      presets.default_id = newId;
+    } else {
+      active.activeParams = legacy.activeParams || active.activeParams;
+      active.passes       = legacy.passes       ?? active.passes;
+      active.wheel        = legacy.wheel        || null;
+    }
+
+    if (legacy.scales && typeof legacy.scales === 'object') {
+      Object.entries(legacy.scales).forEach(([id, opts]) => {
+        if (!Array.isArray(opts) || opts.length < 2) return;
+        const existing = active.scales[id] || {};
+        active.scales[id] = {
+          presentation: existing.presentation || 'pills',
+          options:      opts,
+          scoreMin:     existing.scoreMin     ?? 6,
+          scoreMax:     existing.scoreMax     ?? 10,
+          scoreStep:    existing.scoreStep    ?? 0.25,
+        };
+      });
+    }
+
+    return await window.savePresets(userId, presets);
   } catch (e) {
     return { ok: false, error: e.message };
   }

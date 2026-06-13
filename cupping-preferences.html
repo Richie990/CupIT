@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CupIT — Cupping Preferences  (cupping-preferences.html)
+  ═══════════════════════════════════════════════════════════════
+
+  PURPOSE:
+    Dedicated page for managing the user's cupping presets.
+    Each preset is a saved cupping setup: which attributes are on,
+    how many passes, how each attribute is presented (pills vs slider),
+    and an optional custom flavour wheel.
+
+    Three system presets ship built-in (Casual, QC, SCA) — read-only.
+    Users can duplicate any of them to create their own editable copies.
+    One preset is marked as the default and pre-fills new sessions.
+
+  PAGE LAYOUT:
+    NAV          Top nav with link back to dashboard
+    HEADER       Title + intro paragraph
+    DESKTOP-ONLY EDITOR:
+      LEFT      List of presets (system + user's own), with create button
+      RIGHT     Editor for the currently-selected preset:
+                 - name + description
+                 - "Set as default" button
+                 - attributes (toggle each, configure presentation/score)
+                 - passes
+                 - flavour wheel (collapsible — uses global by default)
+    MOBILE GATE  "Open on a computer to edit" + read-only summary of presets
+
+  AUTO-SAVE:
+    Every change debounced 800ms → savePresets(). Status pill in
+    top-right of the editor shows Saving → Saved → fade.
+
+  RELATED FILES:
+    shared.js     — provides SYSTEM_PRESETS, loadPresets, savePresets,
+                    resolveAttr, applyPresetGlobals
+    account.html  — still has the older single-default editor (will be
+                    removed in Phase 4D). Both editors coexist for now;
+                    they write to the same column but through different
+                    legacy/new helpers, and shared.js keeps them in sync.
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2319" />
+  <title>Cupping Preferences — CupIT</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CupIT" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="shared.js"></script>
+  <style>
+    :root {
+      --bg:      #e8e4d9;
+      --paper:   #f0ede5;
+      --dark:    #1a2319;
+      --brown:   #2d3b2d;
+      --mid:     #8faa8b;
+      --light:   #8faa8b;
+      --accent:  #c9a84c;
+      --cream:   #e8e4d9;
+      --divider: rgba(45,59,45,0.12);
+      --r:       14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999; opacity: 0.5;
+    }
+
+    /* ── NAV (matches account.html / other authed pages) ── */
+    .top-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(232,228,217,0.95); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--divider);
+      padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--brown); text-decoration: none; }
+    .nav-logo em { font-style: italic; color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 20px; }
+    .nav-link { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid); text-decoration: none; transition: color 0.2s; white-space: nowrap; }
+    .nav-link:hover { color: var(--brown); }
+    .nav-link.active { color: var(--brown); font-weight: 500; }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      background: var(--dark);
+      padding: 36px 24px 44px; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 120%, rgba(201,168,76,0.18) 0%, transparent 65%);
+    }
+    .page-header-content { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; }
+    .page-header-tag {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 10px; display: block;
+    }
+    .page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      font-weight: 400; color: var(--cream); line-height: 1.2;
+      margin-bottom: 10px;
+    }
+    .page-header h1 em { font-style: italic; color: var(--light); }
+    .page-header-sub {
+      font-size: 0.95rem; color: rgba(232,228,217,0.72);
+      line-height: 1.65; font-weight: 300; max-width: 540px; margin: 0 auto;
+    }
+
+    /* ── BODY LAYOUT ── */
+    main {
+      flex: 1; width: 100%;
+      max-width: 1100px; margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+
+    /* Mobile gate */
+    .cp-mobile-gate { display: none; }
+    .cp-mobile-icon { font-size: 2rem; display: block; margin-bottom: 12px; opacity: 0.6; text-align: center; }
+    .cp-mobile-gate h2 {
+      font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: 500;
+      color: var(--brown); margin-bottom: 8px; text-align: center;
+    }
+    .cp-mobile-gate p {
+      font-size: 0.92rem; color: var(--mid); line-height: 1.65;
+      text-align: center; margin-bottom: 20px;
+    }
+    .cp-mobile-summary {
+      background: var(--paper); border: 1px solid var(--divider);
+      border-radius: var(--r); padding: 18px 20px;
+    }
+    .cp-mobile-summary h3 {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 10px;
+    }
+    .cp-mobile-list-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--divider);
+      font-size: 0.92rem; color: var(--brown);
+    }
+    .cp-mobile-list-item:last-child { border-bottom: none; }
+    .cp-mobile-default {
+      font-family: 'DM Mono', monospace; font-size: 0.54rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    @media (max-width: 820px) {
+      .cp-mobile-gate { display: block; }
+      .cp-desktop { display: none !important; }
+    }
+
+    /* ── DESKTOP LAYOUT ── */
+    .cp-desktop {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ── LEFT: PRESET LIST ── */
+    .cp-list {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: var(--r);
+      padding: 14px;
+      position: sticky; top: 76px;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+    .cp-list-header {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--mid); padding: 4px 6px 12px;
+    }
+    .cp-preset {
+      padding: 10px 12px; border-radius: 10px;
+      cursor: pointer; transition: background 0.15s;
+      margin-bottom: 4px;
+      border: 1.5px solid transparent;
+    }
+    .cp-preset:hover { background: var(--bg); }
+    .cp-preset.selected {
+      background: var(--bg); border-color: var(--accent);
+    }
+    .cp-preset-name {
+      font-family: 'Playfair Display', serif; font-size: 0.95rem;
+      font-weight: 500; color: var(--brown);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .cp-preset-name em { font-style: italic; }
+    .cp-preset-meta {
+      font-family: 'DM Mono', monospace; font-size: 0.54rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); margin-top: 4px;
+    }
+    .cp-badge {
+      font-family: 'DM Mono', monospace; font-size: 0.5rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 50px;
+    }
+    .cp-badge-default { background: rgba(201,168,76,0.18); color: #a3811f; }
+    .cp-badge-system  { background: var(--divider); color: var(--mid); }
+
+    .cp-list-divider {
+      border: none; border-top: 1px solid var(--divider);
+      margin: 10px 6px;
+    }
+    .cp-new-btn {
+      width: 100%; margin-top: 6px;
+      padding: 10px; border: 1.5px dashed var(--divider);
+      background: transparent; border-radius: 10px; cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--mid); transition: all 0.15s;
+    }
+    .cp-new-btn:hover { color: var(--brown); border-color: var(--brown); }
+
+    /* ── RIGHT: EDITOR ── */
+    .cp-editor {
+      background: var(--paper);
+      border: 1px solid var(--divider);
+      border-radius: var(--r);
+      padding: 26px 28px;
+    }
+    .cp-editor-empty {
+      padding: 60px 30px; text-align: center; color: var(--mid);
+      font-style: italic; font-size: 0.95rem;
+    }
+
+    .cp-editor-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 18px; margin-bottom: 22px;
+    }
+    .cp-editor-titlewrap { flex: 1; min-width: 0; }
+
+    .cp-name-input {
+      width: 100%; border: 1.5px solid transparent;
+      background: transparent; outline: none;
+      font-family: 'Playfair Display', serif; font-size: 1.4rem;
+      font-weight: 500; color: var(--brown);
+      padding: 4px 8px; border-radius: 8px; margin: -4px -8px;
+      transition: border-color 0.15s;
+    }
+    .cp-name-input:focus { border-color: var(--accent); background: var(--bg); }
+    .cp-name-input:disabled { color: var(--brown); opacity: 1; cursor: default; }
+
+    .cp-desc-input {
+      width: 100%; margin-top: 8px;
+      border: 1.5px solid transparent; background: transparent; outline: none;
+      font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+      color: var(--mid); line-height: 1.55;
+      padding: 4px 8px; border-radius: 8px; margin-left: -8px; margin-right: -8px;
+      resize: vertical; min-height: 50px;
+      transition: border-color 0.15s;
+    }
+    .cp-desc-input:focus { border-color: var(--accent); background: var(--bg); }
+    .cp-desc-input:disabled { color: var(--mid); opacity: 1; cursor: default; }
+
+    .cp-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'DM Mono', monospace; font-size: 0.58rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid);
+      padding: 4px 12px; border-radius: 50px;
+      background: var(--divider); opacity: 0;
+      transition: opacity 0.2s;
+      flex-shrink: 0;
+    }
+    .cp-status.visible { opacity: 1; }
+    .cp-status.saved   { color: #2d4a26; background: rgba(45,74,38,0.08); }
+    .cp-status.error   { color: #c0392b; background: rgba(192,57,43,0.08); }
+
+    /* Action row under the title */
+    .cp-actions {
+      display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap;
+    }
+    .cp-btn {
+      padding: 8px 16px; border-radius: 50px;
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; transition: all 0.15s;
+      border: 1.5px solid var(--divider);
+      background: transparent; color: var(--brown);
+    }
+    .cp-btn:hover { border-color: var(--brown); }
+    .cp-btn.primary {
+      background: var(--dark); color: var(--cream); border-color: var(--dark);
+    }
+    .cp-btn.primary:hover { background: var(--brown); border-color: var(--brown); }
+    .cp-btn.danger { color: #c0392b; border-color: rgba(192,57,43,0.3); }
+    .cp-btn.danger:hover { background: rgba(192,57,43,0.05); border-color: #c0392b; }
+    .cp-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Subsection */
+    .cp-section {
+      padding: 22px 0;
+      border-bottom: 1px solid var(--divider);
+    }
+    .cp-section:last-child { border-bottom: none; padding-bottom: 4px; }
+    .cp-section-title {
+      font-family: 'Playfair Display', serif; font-size: 1.05rem;
+      font-weight: 500; color: var(--brown); margin-bottom: 6px;
+    }
+    .cp-section-help {
+      font-size: 0.86rem; color: var(--mid); line-height: 1.6;
+      margin-bottom: 18px; max-width: 580px;
+    }
+
+    /* Attribute row */
+    .cp-attr {
+      padding: 12px 0; border-top: 1px solid var(--divider);
+    }
+    .cp-attr:first-child { border-top: none; }
+    .cp-attr-head {
+      display: flex; align-items: center; gap: 12px; justify-content: space-between;
+    }
+    .cp-attr-label {
+      font-size: 0.95rem; color: var(--brown); font-weight: 500;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .cp-attr-locked {
+      font-family: 'DM Mono', monospace; font-size: 0.5rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); padding: 3px 8px;
+      border-radius: 50px; background: var(--divider);
+    }
+
+    /* Toggle */
+    .cp-toggle {
+      width: 42px; height: 24px; border-radius: 12px;
+      background: var(--divider); cursor: pointer;
+      position: relative; transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .cp-toggle-knob {
+      position: absolute; top: 3px; left: 3px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .cp-toggle.on { background: var(--accent); }
+    .cp-toggle.on .cp-toggle-knob { transform: translateX(18px); }
+    .cp-toggle.disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Attribute config panel — shown when toggle is on AND attribute is scale-type */
+    .cp-attr-config {
+      margin-top: 12px; padding: 12px 14px;
+      background: var(--bg); border-radius: 10px;
+      font-size: 0.86rem;
+    }
+    .cp-config-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .cp-config-row:last-child { margin-bottom: 0; }
+    .cp-config-label {
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); min-width: 110px;
+    }
+
+    /* Segmented control for pills/slider toggle */
+    .cp-segmented {
+      display: inline-flex; background: var(--paper);
+      border: 1.5px solid var(--divider); border-radius: 50px;
+      padding: 2px;
+    }
+    .cp-seg-btn {
+      padding: 6px 14px; border: none; background: transparent;
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--mid); cursor: pointer; border-radius: 50px;
+      transition: all 0.15s;
+    }
+    .cp-seg-btn.active { background: var(--dark); color: var(--cream); }
+    .cp-seg-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+    /* Pill editor (re-used) */
+    .cp-pills {
+      display: flex; flex-wrap: wrap; gap: 6px; flex: 1;
+    }
+    .cp-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 10px 5px 12px;
+      background: var(--paper); border: 1.5px solid var(--divider);
+      border-radius: 50px; transition: border-color 0.15s;
+    }
+    .cp-pill:focus-within { border-color: var(--accent); }
+    .cp-pill input {
+      border: none; background: transparent; outline: none;
+      font-family: 'DM Sans', sans-serif; font-size: 0.84rem;
+      color: var(--brown); width: 80px; padding: 0;
+    }
+    .cp-pill .cp-pill-score {
+      font-family: 'DM Mono', monospace; font-size: 0.5rem;
+      color: var(--mid); margin-left: 2px;
+    }
+    .cp-pill-remove {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: none; background: rgba(192,57,43,0.1);
+      color: #c0392b; cursor: pointer;
+      font-size: 0.65rem; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .cp-pill-remove:hover { background: rgba(192,57,43,0.2); }
+    .cp-pill-remove:disabled { opacity: 0.25; cursor: not-allowed; }
+    .cp-pill-add {
+      padding: 5px 12px;
+      background: transparent; border: 1.5px dashed var(--divider);
+      border-radius: 50px; color: var(--mid); cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 0.56rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      transition: all 0.15s;
+    }
+    .cp-pill-add:hover { color: var(--brown); border-color: var(--brown); }
+
+    /* Number input */
+    .cp-num {
+      width: 64px; padding: 5px 8px;
+      border: 1.5px solid var(--divider); border-radius: 8px;
+      background: var(--paper); color: var(--brown);
+      font-family: 'DM Mono', monospace; font-size: 0.84rem;
+      text-align: center; outline: none;
+      transition: border-color 0.15s;
+    }
+    .cp-num:focus { border-color: var(--accent); }
+
+    /* Stepper (for passes) */
+    .cp-stepper {
+      display: inline-flex; align-items: center; gap: 0;
+      border: 1.5px solid var(--divider); border-radius: 50px;
+      overflow: hidden;
+    }
+    .cp-stepper button {
+      width: 32px; height: 32px; border: none;
+      background: transparent; color: var(--brown);
+      cursor: pointer; font-size: 1.1rem;
+    }
+    .cp-stepper button:hover:not(:disabled) { background: var(--divider); }
+    .cp-stepper button:disabled { opacity: 0.3; cursor: not-allowed; }
+    .cp-stepper-value {
+      min-width: 32px; text-align: center;
+      font-family: 'DM Mono', monospace; font-size: 0.84rem;
+      color: var(--brown);
+    }
+
+    .cp-readonly-banner {
+      background: rgba(201,168,76,0.08);
+      border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 10px; padding: 12px 14px;
+      margin-bottom: 18px;
+      font-size: 0.85rem; color: var(--brown); line-height: 1.5;
+    }
+    .cp-readonly-banner strong { color: #a3811f; }
+
+    .cp-confirm-modal {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(26,35,25,0.4); backdrop-filter: blur(2px);
+      display: none; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .cp-confirm-modal.open { display: flex; }
+    .cp-confirm-card {
+      background: var(--paper); border-radius: var(--r);
+      max-width: 420px; padding: 24px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+    .cp-confirm-card h3 {
+      font-family: 'Playfair Display', serif; font-size: 1.15rem;
+      font-weight: 500; color: var(--brown); margin-bottom: 8px;
+    }
+    .cp-confirm-card p {
+      font-size: 0.92rem; color: var(--mid); line-height: 1.6;
+      margin-bottom: 18px;
+    }
+    .cp-confirm-actions {
+      display: flex; gap: 8px; justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav class="top-nav">
+  <a href="dashboard.html" class="nav-logo">Cup<em>IT</em></a>
+  <div class="nav-links">
+    <a href="dashboard.html" class="nav-link">Dashboard</a>
+    <a href="history.html" class="nav-link">My sessions</a>
+    <a href="cupping.html" class="nav-link">New session</a>
+    <a href="cupping-preferences.html" class="nav-link active">Preferences</a>
+    <a href="about.html" class="nav-link">About</a>
+    <a href="account.html" class="nav-link">Account</a>
+    <a href="#" class="nav-link" onclick="signOut(event)">Sign out</a>
+  </div>
+</nav>
+
+<!-- ── PAGE HEADER ── -->
+<div class="page-header">
+  <div class="page-header-content">
+    <span class="page-header-tag">Cupping</span>
+    <h1>Cupping <em>Preferences</em></h1>
+    <p class="page-header-sub">
+      Set up the cupping configurations you use. Pick the attributes you want to capture, how each one is presented, and whether you want simple pills or precise numeric scores. Use a built-in preset, or build your own.
+    </p>
+  </div>
+</div>
+
+<main>
+
+  <!-- ─────────── MOBILE GATE ─────────── -->
+  <div class="cp-mobile-gate">
+    <span class="cp-mobile-icon">💻</span>
+    <h2>Editing on a computer is best</h2>
+    <p>The preferences editor is dense with options. We've kept it desktop-only to give each control the space it deserves. Open CupIT on a computer to edit. Below is a read-only summary of what you've got saved.</p>
+    <div class="cp-mobile-summary">
+      <h3>Your presets</h3>
+      <div id="cp-mobile-list"><!-- populated by JS --></div>
+    </div>
+  </div>
+
+  <!-- ─────────── DESKTOP LAYOUT ─────────── -->
+  <div class="cp-desktop">
+
+    <!-- ─── LEFT: PRESET LIST ─── -->
+    <aside class="cp-list">
+      <div class="cp-list-header">Your presets</div>
+      <div id="cp-user-list"><!-- populated by JS --></div>
+
+      <button class="cp-new-btn" onclick="cpNewBlank()">+ New blank preset</button>
+
+      <hr class="cp-list-divider" />
+      <div class="cp-list-header">Built-in</div>
+      <div id="cp-system-list"><!-- populated by JS --></div>
+    </aside>
+
+    <!-- ─── RIGHT: EDITOR ─── -->
+    <section class="cp-editor" id="cp-editor">
+      <div class="cp-editor-empty">Pick a preset on the left to view or edit it.</div>
+    </section>
+  </div>
+</main>
+
+<!-- ── DELETE CONFIRM MODAL ── -->
+<div class="cp-confirm-modal" id="cp-confirm">
+  <div class="cp-confirm-card">
+    <h3 id="cp-confirm-title">Delete preset?</h3>
+    <p id="cp-confirm-body">This cannot be undone.</p>
+    <div class="cp-confirm-actions">
+      <button class="cp-btn" onclick="cpConfirmClose()">Cancel</button>
+      <button class="cp-btn danger" id="cp-confirm-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ═══════════════════════════════════════════════════════════
+  //  STATE
+  // ═══════════════════════════════════════════════════════════
+  let userId    = null;
+  let presets   = null;   // { default_id, presets: [...] } — system merged
+  let selected  = null;   // id of preset currently shown in editor
+  let saveTimer = null;
+
+  // ═══════════════════════════════════════════════════════════
+  //  INIT
+  // ═══════════════════════════════════════════════════════════
+  async function init() {
+    // Auth check — same pattern as other authed pages
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session) { window.location.href = 'login.html'; return; }
+    userId = session.user.id;
+    if (typeof track === 'function') track('page_view', { page: 'cupping_preferences' });
+
+    window.supabaseClient.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') window.location.href = 'index.html';
+    });
+
+    presets = await window.loadPresets(userId);
+    // Auto-select the current default preset
+    selected = presets.default_id;
+    renderAll();
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  RENDERING
+  // ═══════════════════════════════════════════════════════════
+  function renderAll() {
+    renderList();
+    renderEditor();
+    renderMobileSummary();
+  }
+
+  // ── LEFT LIST ──
+  function renderList() {
+    const userPresets   = presets.presets.filter(p => !p.system);
+    const systemPresets = presets.presets.filter(p =>  p.system);
+
+    const renderItem = (p) => `
+      <div class="cp-preset ${p.id === selected ? 'selected' : ''}"
+           onclick="cpSelect('${p.id}')">
+        <div class="cp-preset-name">
+          ${escHtml(p.name)}
+          ${p.id === presets.default_id ? '<span class="cp-badge cp-badge-default">Default</span>' : ''}
+        </div>
+        <div class="cp-preset-meta">
+          ${p.activeParams.length} attr · ${p.passes} pass${p.passes !== 1 ? 'es' : ''}
+        </div>
+      </div>
+    `;
+
+    document.getElementById('cp-user-list').innerHTML = userPresets.length
+      ? userPresets.map(renderItem).join('')
+      : '<div style="padding:8px 12px;font-size:0.82rem;color:var(--mid);font-style:italic">No custom presets yet.</div>';
+
+    document.getElementById('cp-system-list').innerHTML = systemPresets.map(renderItem).join('');
+  }
+
+  // ── MOBILE READ-ONLY SUMMARY ──
+  function renderMobileSummary() {
+    const list = document.getElementById('cp-mobile-list');
+    list.innerHTML = presets.presets.map(p => `
+      <div class="cp-mobile-list-item">
+        <span>${escHtml(p.name)}${p.system ? ' <span class="cp-badge cp-badge-system">Built-in</span>' : ''}</span>
+        ${p.id === presets.default_id ? '<span class="cp-mobile-default">Default</span>' : ''}
+      </div>
+    `).join('');
+  }
+
+  // ── RIGHT: EDITOR ──
+  function renderEditor() {
+    const editor = document.getElementById('cp-editor');
+    const preset = presets.presets.find(p => p.id === selected);
+
+    if (!preset) {
+      editor.innerHTML = `<div class="cp-editor-empty">Pick a preset on the left to view or edit it.</div>`;
+      return;
+    }
+
+    const readOnly = !!preset.system;
+    const isDefault = preset.id === presets.default_id;
+
+    editor.innerHTML = `
+      <div class="cp-editor-head">
+        <div class="cp-editor-titlewrap">
+          <input class="cp-name-input" id="cp-name" value="${escAttr(preset.name)}"
+                 ${readOnly ? 'disabled' : ''} maxlength="40"
+                 oninput="cpRenamePreset(this.value)" />
+          <textarea class="cp-desc-input" id="cp-desc" ${readOnly ? 'disabled' : ''}
+                    placeholder="Optional description — what's this preset for?"
+                    oninput="cpChangeDesc(this.value)"
+                    >${escHtml(preset.description || '')}</textarea>
+        </div>
+        <span class="cp-status" id="cp-status"></span>
+      </div>
+
+      ${readOnly ? `
+        <div class="cp-readonly-banner">
+          <strong>This is a built-in preset</strong> — read-only. To customise it, duplicate it first using the button below.
+        </div>` : ''}
+
+      <div class="cp-actions">
+        ${isDefault
+          ? `<button class="cp-btn" disabled>✓ Default for new sessions</button>`
+          : `<button class="cp-btn primary" onclick="cpSetDefault()">Set as default</button>`
+        }
+        <button class="cp-btn" onclick="cpDuplicate()">Duplicate</button>
+        ${!readOnly && !isDefault
+          ? `<button class="cp-btn danger" onclick="cpAskDelete()">Delete</button>`
+          : ''
+        }
+      </div>
+
+      <!-- ATTRIBUTES -->
+      <div class="cp-section">
+        <h3 class="cp-section-title">Attributes</h3>
+        <p class="cp-section-help">
+          Pick which attributes to capture per coffee. Each attribute can be presented as qualitative <strong>pills</strong> (e.g. "Bright, Sharp, Vibrant") or as a numeric <strong>slider</strong> (e.g. 6.00&ndash;10.00 for SCA-style scoring). Pills use equal-spaced hidden scores under the hood, so data is always comparable.
+        </p>
+        <div id="cp-attrs">${renderAttrs(preset, readOnly)}</div>
+      </div>
+
+      <!-- PASSES -->
+      <div class="cp-section">
+        <h3 class="cp-section-title">Evaluation passes</h3>
+        <p class="cp-section-help">
+          How many times to evaluate each coffee. SCA cupping uses 3 passes at different temperatures (hot ~70°C, warm ~55°C, cool ~38°C) because flavour develops as coffee cools. For casual or fast QC, 1 pass is plenty.
+        </p>
+        <div style="display:flex;align-items:center;justify-content:space-between;max-width:340px">
+          <span style="font-size:0.92rem;color:var(--brown)">Passes per coffee</span>
+          <div class="cp-stepper">
+            <button onclick="cpPasses(-1)" ${readOnly || preset.passes <= 1 ? 'disabled' : ''}>−</button>
+            <span class="cp-stepper-value">${preset.passes}</span>
+            <button onclick="cpPasses(1)"  ${readOnly || preset.passes >= 5 ? 'disabled' : ''}>+</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ── ATTRIBUTES SECTION RENDER ──
+  function renderAttrs(preset, readOnly) {
+    return window.ALL_PARAMS.map(p => {
+      const isOn = preset.activeParams.includes(p.id);
+      // 'flavours' is always on — locked
+      const locked = p.id === 'flavours';
+      const isScale = p.type === 'scale';
+
+      // Resolve presentation for this attribute under this preset
+      const resolved = window.resolveAttr(preset, p.id);
+
+      return `
+        <div class="cp-attr">
+          <div class="cp-attr-head">
+            <div class="cp-attr-label">
+              ${escHtml(p.label)}
+              ${locked ? '<span class="cp-attr-locked">Always on</span>' : ''}
+            </div>
+            ${locked
+              ? '<div class="cp-toggle on disabled"><div class="cp-toggle-knob"></div></div>'
+              : `<div class="cp-toggle ${isOn?'on':''} ${readOnly?'disabled':''}"
+                      onclick="${readOnly?'':`cpToggleAttr('${p.id}')`}">
+                   <div class="cp-toggle-knob"></div>
+                 </div>`
+            }
+          </div>
+
+          ${isOn && isScale ? renderAttrConfig(p, resolved, preset, readOnly) : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderAttrConfig(catalog, resolved, preset, readOnly) {
+    return `
+      <div class="cp-attr-config">
+        <!-- Presentation toggle -->
+        <div class="cp-config-row">
+          <span class="cp-config-label">Show as</span>
+          <div class="cp-segmented">
+            <button class="cp-seg-btn ${resolved.presentation === 'pills' ? 'active':''}"
+                    ${readOnly?'disabled':''}
+                    onclick="cpSetPresentation('${catalog.id}','pills')">Pills</button>
+            <button class="cp-seg-btn ${resolved.presentation === 'slider' ? 'active':''}"
+                    ${readOnly?'disabled':''}
+                    onclick="cpSetPresentation('${catalog.id}','slider')">Slider</button>
+          </div>
+        </div>
+
+        ${resolved.presentation === 'pills' ? `
+          <div class="cp-config-row">
+            <span class="cp-config-label">Pill labels</span>
+            <div class="cp-pills">
+              ${resolved.options.map((opt, idx) => {
+                const score = window.pillScore(idx, resolved.options.length, resolved.scoreMin, resolved.scoreMax);
+                return `<span class="cp-pill">
+                  <input type="text" value="${escAttr(opt)}" maxlength="22"
+                    ${readOnly?'disabled':''}
+                    oninput="cpRenamePill('${catalog.id}', ${idx}, this.value)" />
+                  <span class="cp-pill-score">${score.toFixed(1)}</span>
+                  <button class="cp-pill-remove" ${readOnly || resolved.options.length <= 2 ? 'disabled' : ''}
+                    onclick="cpRemovePill('${catalog.id}', ${idx})" aria-label="Remove">×</button>
+                </span>`;
+              }).join('')}
+              ${!readOnly && resolved.options.length < 8
+                ? `<button class="cp-pill-add" onclick="cpAddPill('${catalog.id}')">+ Add</button>`
+                : ''}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Score range — used for both pills (hidden score) and slider (actual range) -->
+        <div class="cp-config-row">
+          <span class="cp-config-label">Score range</span>
+          <input class="cp-num" type="number" step="0.25" value="${resolved.scoreMin}"
+            ${readOnly?'disabled':''}
+            onchange="cpSetScoreField('${catalog.id}','scoreMin', parseFloat(this.value))" />
+          <span style="color:var(--mid)">to</span>
+          <input class="cp-num" type="number" step="0.25" value="${resolved.scoreMax}"
+            ${readOnly?'disabled':''}
+            onchange="cpSetScoreField('${catalog.id}','scoreMax', parseFloat(this.value))" />
+          <span style="color:var(--mid)">step</span>
+          <input class="cp-num" type="number" step="0.25" min="0.05" value="${resolved.scoreStep}"
+            ${readOnly?'disabled':''}
+            onchange="cpSetScoreField('${catalog.id}','scoreStep', parseFloat(this.value))" />
+        </div>
+      </div>
+    `;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  EDITS — every mutator follows the same shape: mutate, save, render
+  // ═══════════════════════════════════════════════════════════
+
+  function getActive() {
+    return presets.presets.find(p => p.id === selected);
+  }
+  function isEditable() {
+    const p = getActive();
+    return p && !p.system;
+  }
+
+  function cpSelect(id) {
+    selected = id;
+    renderAll();
+  }
+
+  function cpRenamePreset(name) {
+    if (!isEditable()) return;
+    getActive().name = name;
+    queueSave();
+    renderList(); // name shows in left list
+  }
+
+  function cpChangeDesc(desc) {
+    if (!isEditable()) return;
+    getActive().description = desc;
+    queueSave();
+  }
+
+  function cpSetDefault() {
+    presets.default_id = selected;
+    queueSave();
+    renderAll();
+  }
+
+  function cpToggleAttr(attrId) {
+    if (!isEditable()) return;
+    const p = getActive();
+    const idx = p.activeParams.indexOf(attrId);
+    if (idx >= 0) p.activeParams.splice(idx, 1);
+    else          p.activeParams.push(attrId);
+    queueSave();
+    renderEditor(); // attr config panel may appear/disappear
+    renderList();   // attr count badge updates
+  }
+
+  function cpPasses(delta) {
+    if (!isEditable()) return;
+    const p = getActive();
+    const next = Math.max(1, Math.min(5, (p.passes || 1) + delta));
+    if (next === p.passes) return;
+    p.passes = next;
+    queueSave();
+    renderEditor();
+    renderList();
+  }
+
+  // Ensure the per-attribute scales override exists, then mutate it.
+  function getScaleOverride(attrId) {
+    const p = getActive();
+    if (!p.scales) p.scales = {};
+    if (!p.scales[attrId]) {
+      // Seed from catalog defaults
+      const catalog = window.ALL_PARAMS.find(c => c.id === attrId);
+      p.scales[attrId] = {
+        presentation: 'pills',
+        options:      [...(catalog?.options || ['Low','Mid','High'])],
+        scoreMin:     6,
+        scoreMax:     10,
+        scoreStep:    0.25,
+      };
+    }
+    return p.scales[attrId];
+  }
+
+  function cpSetPresentation(attrId, mode) {
+    if (!isEditable()) return;
+    const ov = getScaleOverride(attrId);
+    ov.presentation = mode;
+    queueSave();
+    renderEditor();
+  }
+
+  function cpRenamePill(attrId, idx, val) {
+    if (!isEditable()) return;
+    const ov = getScaleOverride(attrId);
+    ov.options[idx] = val;
+    queueSave();
+    // No re-render: would steal input focus mid-typing.
+    // Score next to the pill doesn't change when only the label changes,
+    // so no visual update needed for that either.
+  }
+
+  function cpAddPill(attrId) {
+    if (!isEditable()) return;
+    const ov = getScaleOverride(attrId);
+    if (ov.options.length >= 8) return;
+    ov.options.push('New');
+    queueSave();
+    renderEditor();
+    // Focus the newly-added pill
+    setTimeout(() => {
+      const inputs = document.querySelectorAll(`.cp-attr .cp-pills input`);
+      const newInput = inputs[inputs.length - 1];
+      if (newInput) { newInput.focus(); newInput.select(); }
+    }, 0);
+  }
+
+  function cpRemovePill(attrId, idx) {
+    if (!isEditable()) return;
+    const ov = getScaleOverride(attrId);
+    if (ov.options.length <= 2) return;
+    ov.options.splice(idx, 1);
+    queueSave();
+    renderEditor();
+  }
+
+  function cpSetScoreField(attrId, field, val) {
+    if (!isEditable()) return;
+    if (isNaN(val)) return;
+    const ov = getScaleOverride(attrId);
+    ov[field] = val;
+    queueSave();
+    renderEditor(); // hidden score labels under pills depend on range
+  }
+
+  // Duplicate works for both user and system presets — pop a copy into the
+  // user list and select it.
+  function cpDuplicate() {
+    const src = getActive();
+    if (!src) return;
+    const newId = 'user_' + Math.random().toString(36).slice(2, 10);
+    const copy = JSON.parse(JSON.stringify(src));
+    copy.id          = newId;
+    copy.system      = false;
+    copy.name        = src.system ? src.name + ' (mine)' : src.name + ' copy';
+    copy.description = ''; // start fresh — the original's description is theirs
+    // Insert at the top of user presets (before any system ones)
+    const firstSystemIdx = presets.presets.findIndex(p => p.system);
+    if (firstSystemIdx < 0) presets.presets.push(copy);
+    else presets.presets.splice(firstSystemIdx, 0, copy);
+    selected = newId;
+    queueSave();
+    renderAll();
+  }
+
+  // ── New-blank preset ──
+  function cpNewBlank() {
+    const newId = 'user_' + Math.random().toString(36).slice(2, 10);
+    const blank = {
+      id:           newId,
+      name:         'New preset',
+      description:  '',
+      system:       false,
+      activeParams: ['flavours','notes'],
+      passes:       1,
+      wheel:        null,
+      scales:       {},
+    };
+    const firstSystemIdx = presets.presets.findIndex(p => p.system);
+    if (firstSystemIdx < 0) presets.presets.push(blank);
+    else presets.presets.splice(firstSystemIdx, 0, blank);
+    selected = newId;
+    queueSave();
+    renderAll();
+  }
+
+  // ── Delete (with confirmation) ──
+  function cpAskDelete() {
+    const p = getActive();
+    if (!p || p.system) return;
+    const modal = document.getElementById('cp-confirm');
+    document.getElementById('cp-confirm-title').textContent = `Delete "${p.name}"?`;
+    document.getElementById('cp-confirm-body').textContent  =
+      'This preset will be gone for good. Sessions you\'ve already cupped with it are unaffected.';
+    document.getElementById('cp-confirm-ok').onclick = () => {
+      cpDoDelete(p.id);
+      cpConfirmClose();
+    };
+    modal.classList.add('open');
+  }
+  function cpConfirmClose() {
+    document.getElementById('cp-confirm').classList.remove('open');
+  }
+  function cpDoDelete(id) {
+    const idx = presets.presets.findIndex(p => p.id === id);
+    if (idx < 0) return;
+    presets.presets.splice(idx, 1);
+
+    // If we deleted the default, fall back to the first system preset.
+    if (presets.default_id === id) {
+      const firstSystem = presets.presets.find(p => p.system);
+      presets.default_id = firstSystem ? firstSystem.id : window.DEFAULT_PRESET_ID;
+    }
+
+    // Switch selection to default
+    selected = presets.default_id;
+    queueSave();
+    renderAll();
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  AUTO-SAVE — 800ms debounce
+  // ═══════════════════════════════════════════════════════════
+  function queueSave() {
+    setStatus('saving', 'Saving…');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 800);
+  }
+
+  async function doSave() {
+    const res = await window.savePresets(userId, presets);
+    if (res.ok) {
+      setStatus('saved', 'Saved ✓');
+      setTimeout(() => setStatus('', ''), 1600);
+    } else {
+      setStatus('error', 'Save failed');
+      console.error('[savePresets]', res.error);
+    }
+  }
+
+  function setStatus(kind, text) {
+    const el = document.getElementById('cp-status');
+    if (!el) return;
+    el.className = 'cp-status' + (kind ? ' ' + kind + ' visible' : '');
+    el.textContent = text;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  UTILITIES
+  // ═══════════════════════════════════════════════════════════
+  function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+  function escAttr(s) {
+    return String(s ?? '').replace(/"/g, '&quot;');
+  }
+
+  async function signOut(event) {
+    if (event) event.preventDefault();
+    await window.supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  }
+
+  init();
+</script>
+
+</body>
+</html>
