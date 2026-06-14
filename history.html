@@ -857,7 +857,7 @@
     const [hostedRes, guestRes] = await Promise.all([
       window.supabaseClient
         .from('cupping_sessions')
-        .select('id, session_name, session_date, coffees, params_active, timer_enabled, share_token, is_active, status, blind, scheduled_at, recurrence')
+        .select('id, session_name, session_date, coffees, params_active, schema, timer_enabled, share_token, is_active, status, blind, scheduled_at, recurrence')
         .eq('user_id', userId)
         .neq('status', 'cancelled')
         .neq('status', 'scheduled')
@@ -880,6 +880,7 @@
         name:         s.session_name,
         date:         s.session_date,
         coffees:      s.coffees || [],
+        schema:       s.schema || null,
         shareToken:   s.share_token || null,
         isActive:     s.is_active,
         status:       s.status || (s.is_active ? 'active' : 'ended'),
@@ -904,7 +905,7 @@
       if (tokens.length) {
         const { data: parentSessions, error: parentErr } = await window.supabaseClient
           .from('cupping_sessions')
-          .select('id, session_name, session_date, user_id, status, share_token')
+          .select('id, session_name, session_date, user_id, status, share_token, schema')
           .in('share_token', tokens);
 
         if (parentErr) {
@@ -940,6 +941,7 @@
             hostSessionId: parent.id,
             hostName:      hostNameById[parent.user_id] || 'Unknown host',
             hostStatus:    parent.status,
+            schema:        parent.schema || null,
             coffees:       r.coffees || [],
             submittedAt:   r.created_at,
             guestName:     r.guest_name,
@@ -1474,7 +1476,36 @@
     const allResponses = [hostAsResp, ...responses];
     const container    = document.getElementById('drawer-report-content');
 
-    // SCALE_FIELDS is global (defined in shared.js)
+    // Scale attributes for this session, driven by its saved schema snapshot.
+    // Falls back to global SCALE_FIELDS (as pills) for sessions with no schema.
+    const scaleFields = window.schemaScaleFields(s.schema);
+
+    // Aggregate all responses for one coffee into per-attribute mean scores.
+    // Returns array aligned with scaleFields: { mean, label, count, min, max, presentation }.
+    const aggregateScores = (ci) => scaleFields.map(sf => {
+      const vals = [];
+      allResponses.forEach(r => {
+        const v = window.readScaleValue(r.coffees?.[ci]?.data?.[sf.id]);
+        if (v && v.value != null) vals.push(v.value);
+      });
+      const count = vals.length;
+      const mean  = count ? vals.reduce((a,b)=>a+b,0)/count : 0;
+      let label = null;
+      if (count) {
+        if (sf.presentation === 'pills') {
+          let best = 0, bestDist = Infinity;
+          sf.options.forEach((o, i) => {
+            const sc = window.pillScore(i, sf.options.length, sf.scoreMin, sf.scoreMax);
+            const dist = Math.abs(sc - mean);
+            if (dist < bestDist) { bestDist = dist; best = i; }
+          });
+          label = sf.options[best];
+        } else {
+          label = mean.toFixed(2);
+        }
+      }
+      return { mean, label, count, min: sf.scoreMin, max: sf.scoreMax, presentation: sf.presentation };
+    });
 
     // ── Stats ──
     const statHtml = `
@@ -1488,17 +1519,7 @@
 
     // ── One card per coffee ──
     const cardsHtml = coffees.map((cf, ci) => {
-      const radarData = SCALE_FIELDS.map(sf => {
-        const counts = {};
-        sf.options.forEach(o => counts[o] = 0);
-        allResponses.forEach(r => {
-          const val = r.coffees?.[ci]?.data?.[sf.id];
-          if (val && counts[val] !== undefined) counts[val]++;
-        });
-        const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-        return { score: top?.[1] > 0 ? sf.options.indexOf(top[0]) : 0, top: top?.[1] > 0 ? top[0] : null, count: top?.[1] || 0 };
-      });
-
+      const radarData = aggregateScores(ci);
       const hasData = radarData.some(r => r.count > 0);
 
       return `
@@ -1510,10 +1531,10 @@
               <canvas id="rc-${ci}" role="img" aria-label="Radar for ${escHtml(cf.name)}">Sensory radar.</canvas>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px">
-              ${SCALE_FIELDS.map((sf,i) => radarData[i].count > 0 ? `
+              ${scaleFields.map((sf,i) => radarData[i].count > 0 ? `
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                  <span style="font-family:'DM Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:#8faa8b">${sf.label}</span>
-                  <span style="font-size:0.78rem;color:#c9a84c">${radarData[i].top} <span style="color:rgba(143,170,139,0.6);font-size:0.7rem">(${radarData[i].count})</span></span>
+                  <span style="font-family:'DM Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:#8faa8b">${escHtml(sf.label)}</span>
+                  <span style="font-size:0.78rem;color:#c9a84c">${escHtml(radarData[i].label)} <span style="color:rgba(143,170,139,0.6);font-size:0.7rem">(${radarData[i].count})</span></span>
                 </div>` : '').join('')}
             </div>` : `<p style="font-size:0.82rem;color:#8faa8b">No sensory data yet.</p>`}
         </div>`;
@@ -1521,26 +1542,24 @@
 
     container.innerHTML = statHtml + cardsHtml;
     container._allResponses = allResponses;
+    container._scaleFields  = scaleFields;
+    container._aggregateScores = aggregateScores;
 
     // Build radar charts for each coffee
     setTimeout(() => {
       coffees.forEach((cf, ci) => {
         const canvas = document.getElementById(`rc-${ci}`);
         if (!canvas || !window.Chart) return;
-        const radarData = SCALE_FIELDS.map(sf => {
-          const counts = {};
-          sf.options.forEach(o => counts[o] = 0);
-          allResponses.forEach(r => {
-            const val = r.coffees?.[ci]?.data?.[sf.id];
-            if (val && counts[val] !== undefined) counts[val]++;
-          });
-          const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-          return top?.[1] > 0 ? sf.options.indexOf(top[0]) : 0;
+        const agg = aggregateScores(ci);
+        // Normalise each attribute's mean to 0-1 within its own range
+        const radarData = agg.map(a => {
+          if (!a.count || a.max === a.min) return 0;
+          return (a.mean - a.min) / (a.max - a.min);
         });
         new Chart(canvas, {
           type: 'radar',
           data: {
-            labels: SCALE_FIELDS.map(f => f.label),
+            labels: scaleFields.map(f => f.label),
             datasets: [{
               data: radarData,
               borderColor: '#c9a84c',
@@ -1554,7 +1573,7 @@
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: { r: {
-              min: 0, max: 4,
+              min: 0, max: 1,
               ticks: { display: false },
               pointLabels: { font: { size: 9 }, color: '#8faa8b' },
               grid: { color: 'rgba(232,228,217,0.08)' },
@@ -1618,19 +1637,19 @@
     const canvas = document.getElementById('report-radar');
     if (!canvas) return;
 
-    // SCALE_FIELDS is global (defined in shared.js)
     const COLORS = ['#e8e4d9','#c9a84c','#8faa8b','#5dcaa5'];
+    const scaleFields = window.schemaScaleFields(currentSession?.schema);
 
     const datasets = coffees.map((cf, ci) => {
-      const data = SCALE_FIELDS.map(sf => {
-        const counts = {};
-        sf.options.forEach(o => counts[o] = 0);
+      const data = scaleFields.map(sf => {
+        const vals = [];
         allResponses.forEach(r => {
-          const val = r.coffees?.[ci]?.data?.[sf.id];
-          if (val && counts[val] !== undefined) counts[val]++;
+          const v = window.readScaleValue(r.coffees?.[ci]?.data?.[sf.id]);
+          if (v && v.value != null) vals.push(v.value);
         });
-        const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-        return top?.[1] > 0 ? sf.options.indexOf(top[0]) : 0;
+        if (!vals.length || sf.scoreMax === sf.scoreMin) return 0;
+        const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+        return (mean - sf.scoreMin) / (sf.scoreMax - sf.scoreMin); // 0-1
       });
       return {
         label: cf.name,
@@ -1646,14 +1665,14 @@
     if (window._radarChartInst) { try { window._radarChartInst.destroy(); } catch(e){} }
     window._radarChartInst = new Chart(canvas, {
       type: 'radar',
-      data: { labels: SCALE_FIELDS.map(f => f.label), datasets },
+      data: { labels: scaleFields.map(f => f.label), datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
           r: {
-            min: 0, max: 4,
-            ticks: { display: false, stepSize: 1 },
+            min: 0, max: 1,
+            ticks: { display: false },
             pointLabels: { font: { size: 11 }, color: '#8faa8b' },
             grid: { color: 'rgba(232,228,217,0.08)' },
             angleLines: { color: 'rgba(232,228,217,0.08)' },

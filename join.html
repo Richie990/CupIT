@@ -438,6 +438,7 @@
 <script>
   // ── STATE ──
   let sessionData    = null;  // full session row from Supabase
+  let sessionSchema  = null;  // schema snapshot from the session (presentation config)
   let guestName      = '';
   let guestUserId    = null;  // set if guest is logged in to CupIT
   let currentCoffee  = 0;
@@ -459,7 +460,7 @@
     try {
       const { data, error } = await window.supabaseClient
         .from('cupping_sessions')
-        .select('session_name, coffees, params_active, is_active, status, blind, scheduled_at')
+        .select('session_name, coffees, params_active, schema, is_active, status, blind, scheduled_at')
         .eq('share_token', token)
         .single();
 
@@ -467,6 +468,14 @@
 
       sessionData = { ...data, token };
       document.getElementById('state-loading').style.display = 'none';
+
+      // Apply the session's schema snapshot so guests render the exact
+      // attributes / pills / sliders the host configured. If the session
+      // predates schema snapshots, schemaScaleFields() falls back to globals.
+      sessionSchema = data.schema || null;
+      if (sessionSchema && Array.isArray(sessionSchema.wheel) && sessionSchema.wheel.length) {
+        window.WHEEL = sessionSchema.wheel;
+      }
 
       // SCHEDULED — not started yet
       if (data.status === 'scheduled') {
@@ -652,19 +661,37 @@
     // Process select — host only
     // Roast level select — host only
 
-    // Scale fields — qualitative pill selectors
-    // SCALE_FIELDS comes from shared.js (array of {id, label, options})
-    SCALE_FIELDS.forEach(field => {
-      if (params.has(field.id)) {
-        const pillHtml = field.options.map(o =>
-          `<button type="button" class="guest-scale-pill" data-group="${field.id}-${idx}" data-val="${o}" onclick="selectScalePill(this)">${o}</button>`
-        ).join('');
-        html += `<div class="form-group">
-          <label class="form-label">${field.label}</label>
-          <div class="scale-pill-group" id="${field.id}-${idx}">${pillHtml}</div>
-        </div>`;
-      }
-    });
+    // Scale fields — driven by the session schema (presentation per attribute).
+    // schemaScaleFields returns the active scale attrs with their presentation,
+    // options and score range. Falls back to global SCALE_FIELDS if no schema.
+    window.schemaScaleFields(sessionSchema)
+      .filter(field => params.has(field.id))
+      .forEach(field => {
+        if (field.presentation === 'slider') {
+          const min = field.scoreMin, max = field.scoreMax, step = field.scoreStep;
+          html += `<div class="form-group">
+            <label class="form-label">${escHtml(field.label)}
+              <span id="greadout-${field.id}-${idx}" style="float:right;font-family:'DM Mono',monospace;color:var(--accent)">—</span>
+            </label>
+            <input type="range" class="guest-score-slider"
+              min="${min}" max="${max}" step="${step}" value="${min}"
+              data-group="${field.id}-${idx}"
+              oninput="selectScaleSlider(this)" style="width:100%" />
+            <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.54rem;color:var(--mid);margin-top:2px">
+              <span>${min.toFixed(2)}</span><span>${max.toFixed(2)}</span>
+            </div>
+          </div>`;
+        } else {
+          const pillHtml = field.options.map((o, i) => {
+            const score = window.pillScore(i, field.options.length, field.scoreMin, field.scoreMax);
+            return `<button type="button" class="guest-scale-pill" data-group="${field.id}-${idx}" data-val="${escAttr(o)}" data-score="${score}" onclick="selectScalePill(this)">${escHtml(o)}</button>`;
+          }).join('');
+          html += `<div class="form-group">
+            <label class="form-label">${escHtml(field.label)}</label>
+            <div class="scale-pill-group" id="${field.id}-${idx}">${pillHtml}</div>
+          </div>`;
+        }
+      });
 
     // Tasting notes — free text
     if (params.has('notes')) {
@@ -696,7 +723,7 @@
     return html;
   }
 
-  // Scale pill selection — saves directly to guestCoffees like host does
+  // Scale pill selection — stores { value, label } like the host does
   function selectScalePill(btn) {
     const groupId  = btn.dataset.group;
     const lastDash  = groupId.lastIndexOf('-');
@@ -706,7 +733,25 @@
     btn.classList.add('active');
     if (!guestCoffees[coffeeIdx]) return;
     if (!guestCoffees[coffeeIdx].data) guestCoffees[coffeeIdx].data = {};
-    guestCoffees[coffeeIdx].data[fieldId] = btn.dataset.val;
+    const score = parseFloat(btn.dataset.score);
+    guestCoffees[coffeeIdx].data[fieldId] = {
+      value: isNaN(score) ? null : score,
+      label: btn.dataset.val,
+    };
+  }
+
+  // Scale slider — stores { value } (no label in slider mode)
+  function selectScaleSlider(input) {
+    const groupId   = input.dataset.group;
+    const lastDash  = groupId.lastIndexOf('-');
+    const coffeeIdx = parseInt(groupId.slice(lastDash + 1));
+    const fieldId   = groupId.slice(0, lastDash);
+    const val = parseFloat(input.value);
+    if (!guestCoffees[coffeeIdx]) return;
+    if (!guestCoffees[coffeeIdx].data) guestCoffees[coffeeIdx].data = {};
+    guestCoffees[coffeeIdx].data[fieldId] = { value: val };
+    const readout = document.getElementById(`greadout-${fieldId}-${coffeeIdx}`);
+    if (readout) readout.textContent = val.toFixed(2);
   }
 
   // ── FLAVOUR WHEEL ──
@@ -914,18 +959,39 @@
     Object.values(resultsCharts).forEach(ch => { try { ch.destroy(); } catch(e){} });
     resultsCharts = {};
 
+    // Scale attributes for this session (presentation-aware).
+    const scaleFields = window.schemaScaleFields(sessionSchema);
+
+    // Aggregate responses for one coffee into per-attribute mean scores.
+    // Returns array aligned with scaleFields: { mean, label, count, min, max }.
+    function aggregateScores(ci) {
+      return scaleFields.map(sf => {
+        const vals = [];
+        let lastLabel = null;
+        allResponses.forEach(r => {
+          const v = window.readScaleValue(r.coffees?.[ci]?.data?.[sf.id]);
+          if (v && v.value != null) { vals.push(v.value); if (v.label) lastLabel = v.label; }
+        });
+        const count = vals.length;
+        const mean  = count ? vals.reduce((a,b)=>a+b,0) / count : 0;
+        // For pills, find the closest pill label to the mean
+        let label = lastLabel;
+        if (sf.presentation === 'pills' && count) {
+          let best = 0, bestDist = Infinity;
+          sf.options.forEach((o, i) => {
+            const s = window.pillScore(i, sf.options.length, sf.scoreMin, sf.scoreMax);
+            const dist = Math.abs(s - mean);
+            if (dist < bestDist) { bestDist = dist; best = i; }
+          });
+          label = sf.options[best];
+        }
+        return { mean, label, count, min: sf.scoreMin, max: sf.scoreMax };
+      });
+    }
+
     carousel.innerHTML = coffees.map((cf, ci) => {
       const displayName = (blind && !ended) ? `Coffee ${ci+1}` : escHtml(cf.name);
-      const radarData = SCALE_FIELDS.map(sf => {
-        const counts = {};
-        sf.options.forEach(o => counts[o] = 0);
-        allResponses.forEach(r => {
-          const val = r.coffees?.[ci]?.data?.[sf.id];
-          if (val && counts[val] !== undefined) counts[val]++;
-        });
-        const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-        return { score: top?.[1]>0 ? sf.options.indexOf(top[0]) : 0, label: top?.[1]>0 ? top[0] : null, count: top?.[1]||0 };
-      });
+      const radarData = aggregateScores(ci);
       const hasData = radarData.some(r => r.count > 0);
       const tasterCount = allResponses.length;
 
@@ -938,10 +1004,10 @@
               <canvas id="rres-${ci}" role="img" aria-label="Radar for ${displayName}">Sensory radar.</canvas>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px">
-              ${SCALE_FIELDS.map((sf,i) => radarData[i].count > 0 ? `
+              ${scaleFields.map((sf,i) => radarData[i].count > 0 ? `
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                  <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mid)">${sf.label}</span>
-                  <span style="font-size:0.82rem;color:var(--accent)">${radarData[i].label} <span style="color:var(--mid);font-size:0.72rem">(${radarData[i].count})</span></span>
+                  <span style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mid)">${escHtml(sf.label)}</span>
+                  <span style="font-size:0.82rem;color:var(--accent)">${sf.presentation === 'slider' ? radarData[i].mean.toFixed(2) : escHtml(radarData[i].label)} <span style="color:var(--mid);font-size:0.72rem">(${radarData[i].count})</span></span>
                 </div>` : '').join('')}
             </div>` : `<p style="font-size:0.85rem;color:var(--mid)">No sensory data yet.</p>`}
         </div>
@@ -955,24 +1021,19 @@
 
     updateCarouselPosition();
 
-    // Build radar charts
+    // Build radar charts — normalise each attribute's mean to 0-1 within its range
     setTimeout(() => {
       coffees.forEach((cf, ci) => {
         const canvas = document.getElementById(`rres-${ci}`);
         if (!canvas || !window.Chart) return;
-        const data = SCALE_FIELDS.map(sf => {
-          const counts = {};
-          sf.options.forEach(o => counts[o] = 0);
-          allResponses.forEach(r => {
-            const val = r.coffees?.[ci]?.data?.[sf.id];
-            if (val && counts[val] !== undefined) counts[val]++;
-          });
-          const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-          return top?.[1]>0 ? sf.options.indexOf(top[0]) : 0;
+        const agg = aggregateScores(ci);
+        const data = agg.map(a => {
+          if (!a.count || a.max === a.min) return 0;
+          return (a.mean - a.min) / (a.max - a.min); // 0-1 normalised
         });
         const ch = new Chart(canvas, {
           type:'radar',
-          data:{ labels:SCALE_FIELDS.map(f=>f.label), datasets:[{
+          data:{ labels:scaleFields.map(f=>f.label), datasets:[{
             data, borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,0.08)',
             borderWidth:1.5, pointBackgroundColor:'#c9a84c', pointRadius:3,
           }]},
@@ -980,7 +1041,7 @@
             responsive:true, maintainAspectRatio:false,
             plugins:{ legend:{ display:false } },
             scales:{ r:{
-              min:0, max:4, ticks:{ display:false },
+              min:0, max:1, ticks:{ display:false },
               pointLabels:{ font:{ size:10 }, color:'#8faa8b' },
               grid:{ color:'rgba(0,0,0,0.06)' },
               angleLines:{ color:'rgba(0,0,0,0.06)' },
@@ -1074,6 +1135,9 @@
 
   function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function escAttr(s) {
+    return String(s || '').replace(/"/g,'&quot;');
   }
 
   init();

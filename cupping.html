@@ -225,6 +225,26 @@
     .scale-pill:hover { border-color: rgba(201,168,76,0.4); color: #c9a84c; }
     .scale-pill.active { background: rgba(201,168,76,0.2); color: #c9a84c; border-color: rgba(201,168,76,0.4); }
 
+    /* Score slider (advanced/SCA presentation) */
+    .score-slider {
+      -webkit-appearance: none; appearance: none;
+      height: 6px; border-radius: 3px;
+      background: rgba(232,228,217,0.15);
+      outline: none; margin: 8px 0 2px;
+    }
+    .score-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #c9a84c; cursor: pointer;
+      border: 3px solid #1a2319;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .score-slider::-moz-range-thumb {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #c9a84c; cursor: pointer; border: 3px solid #1a2319;
+    }
+    .slider-readout { font-size: 0.9rem; }
+
     .btn-add-coffee { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 16px; background: none; border: 1.5px dashed var(--divider); border-radius: var(--r); color: var(--mid); font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: all 0.18s; }
     .btn-add-coffee:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -408,6 +428,18 @@
   <div class="view-inner">
     <p class="view-title">Set up your session</p>
     <p class="view-sub">Start by choosing when this session is happening, then fill in the details.</p>
+
+    <!-- ── PRESET PICKER ── -->
+    <div class="section-card">
+      <p class="section-card-title">Cupping preset</p>
+      <p style="font-size:0.82rem;color:var(--mid);margin-bottom:14px;line-height:1.5">
+        Which setup to cup with. Changes the attributes and how they're scored.
+        <a href="cupping-preferences.html" style="color:var(--accent);text-decoration:none">Manage presets →</a>
+      </p>
+      <select id="preset-picker" class="form-select" style="width:100%" onchange="onPresetPicked(this.value)">
+        <!-- populated by JS -->
+      </select>
+    </div>
 
     <!-- ── WHEN ── -->
     <div class="section-card">
@@ -613,11 +645,12 @@
   // Default OFF: body, dry_aroma, wet_aroma, aftertaste
   let activeParams = new Set(['flavours','notes']);
 
-  // ── USER DEFAULTS ──
-  // Loaded from profiles.cupping_defaults on init().
-  // null until loaded; null means "use shared.js defaults".
-  // See applyUserDefaults() below for how it's used.
-  let userDefaults = null;
+  // ── PRESETS ──
+  // Loaded from profiles.cupping_defaults via shared.js on init().
+  // presetsData = { default_id, presets: [...] } with system presets merged.
+  // currentPreset = the preset selected in the picker for THIS session.
+  let presetsData   = null;
+  let currentPreset = null;
 
 
   let currentView = 'setup'; // tracks which view is showing
@@ -639,52 +672,74 @@
 
 
   // ══════════════════════════════════════════════════════════
-  //  INIT
-  //  Check auth then seed two blank coffees for setup.
+  //  PRESETS — APPLY
+  //  applyPreset() mutates window.WHEEL and window.ALL_PARAMS.options
+  //  so the rest of the page renders the preset's vocabulary, and sets
+  //  activeParams. Called on init and whenever the picker changes.
   // ══════════════════════════════════════════════════════════
-  // ══════════════════════════════════════════════════════════
-  //  USER DEFAULTS — APPLY
-  //  Mutates window.WHEEL and window.ALL_PARAMS so the rest of
-  //  the page just sees the user's customised vocabulary.
-  //  Called once on init() after loading from Supabase.
-  //
-  //  - Wheel override: replaces window.WHEEL wholesale
-  //  - Scale overrides: replaces the .options array on the
-  //    matching ALL_PARAMS entry
-  //  - activeParams: returns the set of param ids to enable
-  //    by default for a fresh session (caller decides whether
-  //    to apply it — hydration paths skip this)
-  // ══════════════════════════════════════════════════════════
-  function applyUserDefaults(defaults) {
-    if (!defaults) return;
-    userDefaults = defaults;
+  function applyPreset(preset) {
+    if (!preset) return;
+    currentPreset = preset;
+
+    // Reset ALL_PARAMS.options to catalog defaults first, so switching from
+    // a preset with custom options back to one without doesn't leave stale
+    // option arrays behind. We do this by re-deriving from a pristine copy.
+    window.ALL_PARAMS.forEach(p => {
+      if (p.type === 'scale' && p._baseOptions) p.options = [...p._baseOptions];
+    });
 
     // Wheel override
-    if (Array.isArray(defaults.wheel) && defaults.wheel.length > 0) {
-      window.WHEEL = defaults.wheel;
-    }
+    window.WHEEL = (Array.isArray(preset.wheel) && preset.wheel.length)
+      ? preset.wheel
+      : BASE_WHEEL;
 
-    // Scale overrides — mutate the .options array of each matching ALL_PARAMS entry
-    if (defaults.scales && typeof defaults.scales === 'object') {
-      Object.entries(defaults.scales).forEach(([paramId, opts]) => {
+    // Scale option overrides from the preset
+    if (preset.scales && typeof preset.scales === 'object') {
+      Object.entries(preset.scales).forEach(([paramId, cfg]) => {
+        const opts = cfg.options;
         if (!Array.isArray(opts) || opts.length < 2) return;
         const p = window.ALL_PARAMS.find(x => x.id === paramId && x.type === 'scale');
         if (p) p.options = opts;
       });
     }
 
-    // Keep window.SCALE_FIELDS in sync (it's derived from ALL_PARAMS in shared.js
-    // but only at load time, so we have to rebuild it after mutating options)
+    // Rebuild SCALE_FIELDS after mutating options
     window.SCALE_FIELDS = window.ALL_PARAMS
       .filter(p => p.type === 'scale')
       .map(p => ({ id: p.id, label: p.label, options: p.options }));
+
+    // Set active params from the preset
+    activeParams = new Set(preset.activeParams || ['flavours','notes']);
   }
 
-  // Returns the activeParams Set this user prefers for a fresh session.
-  // Falls back to ['flavours','notes'] if no defaults are loaded yet.
-  function defaultActiveParams() {
-    const ids = userDefaults?.activeParams || ['flavours','notes'];
-    return new Set(ids);
+  // Snapshot pristine copies so we can reset when switching presets.
+  const BASE_WHEEL = JSON.parse(JSON.stringify(window.WHEEL));
+  window.ALL_PARAMS.forEach(p => {
+    if (p.type === 'scale') p._baseOptions = [...p.options];
+  });
+
+  // Resolve the presentation config for an attribute under the current preset.
+  // Returns { presentation, options, scoreMin, scoreMax, scoreStep }.
+  function attrConfig(attrId) {
+    return window.resolveAttr(currentPreset || { scales:{} }, attrId);
+  }
+
+  // Populate the preset picker dropdown.
+  function renderPresetPicker() {
+    const sel = document.getElementById('preset-picker');
+    if (!sel || !presetsData) return;
+    sel.innerHTML = presetsData.presets.map(p =>
+      `<option value="${p.id}"${currentPreset && p.id === currentPreset.id ? ' selected' : ''}>${escHtml(p.name)}${p.system ? ' (built-in)' : ''}</option>`
+    ).join('');
+  }
+
+  // Picker change handler — switch the active preset for this session.
+  function onPresetPicked(presetId) {
+    const p = presetsData.presets.find(x => x.id === presetId);
+    if (!p) return;
+    applyPreset(p);
+    buildParamGrid();
+    track('cupping_preset_switched', { preset_id: presetId, preset_name: p.name });
   }
 
 
@@ -700,11 +755,11 @@
         if (event === 'SIGNED_OUT') window.location.href = 'index.html';
       });
 
-      // Load the user's cupping defaults and mutate WHEEL/ALL_PARAMS/SCALE_FIELDS.
-      // Safe-by-default: if loadCuppingDefaults fails, it returns the factory
-      // defaults — so the page always works even if profile or column is missing.
-      const defaults = await window.loadCuppingDefaults(session.user.id);
-      applyUserDefaults(defaults);
+      // Load all presets, apply the user's default one.
+      presetsData = await window.loadPresets(session.user.id);
+      const active = window.getActivePreset(presetsData);
+      applyPreset(active);
+      renderPresetPicker();
 
       // Check for ?token= param first — host joining their own live session to cup
       const urlToken = new URLSearchParams(window.location.search).get('token');
@@ -766,9 +821,7 @@
       console.warn('Auth check failed, continuing anyway:', e.message);
     }
 
-    // Fresh session — apply user's preferred active params before building grid
-    activeParams = defaultActiveParams();
-
+    // activeParams was already set by applyPreset() above.
     buildParamGrid();
     addCoffee();
     addCoffee();
@@ -999,15 +1052,41 @@
       .map(p => {
         if (p.type === 'flavours') return buildFlavourPicker(ci);
         if (p.type === 'scale') {
-          const val = coffees[ci].data[p.id] || '';
+          const cfg = attrConfig(p.id);
+          const stored = coffees[ci].data[p.id];
+          const cur = window.readScaleValue(stored); // { value, label } | null
+
+          if (cfg.presentation === 'slider') {
+            // Numeric slider rendering
+            const min = cfg.scoreMin, max = cfg.scoreMax, step = cfg.scoreStep;
+            const curVal = cur?.value ?? '';
+            const display = curVal === '' ? '—' : Number(curVal).toFixed(2);
+            return `
+              <div class="section-card">
+                <p class="section-card-title">${p.label}
+                  <span class="slider-readout" id="readout-${ci}-${p.id}" style="float:right;font-family:'DM Mono',monospace;color:var(--accent)">${display}</span>
+                </p>
+                <input type="range" class="score-slider"
+                  min="${min}" max="${max}" step="${step}"
+                  value="${curVal === '' ? min : curVal}"
+                  data-ci="${ci}" data-field="${p.id}"
+                  oninput="saveSliderField(this)" style="width:100%" />
+                <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.56rem;color:var(--mid);margin-top:4px">
+                  <span>${min.toFixed(2)}</span><span>${max.toFixed(2)}</span>
+                </div>
+              </div>`;
+          }
+
+          // Pills rendering (default)
           const pillId = `scale-${ci}-${p.id}`;
           return `
             <div class="section-card">
               <p class="section-card-title">${p.label}</p>
               <div id="${pillId}" class="scale-pill-group" style="display:flex;gap:8px;flex-wrap:wrap">
-                ${p.options.map(o => {
-                  const active = val === o ? ' active' : '';
-                  return `<button class="scale-pill${active}" data-ci="${ci}" data-field="${p.id}" data-val="${o}" onclick="saveScaleField(this)">${o}</button>`;
+                ${cfg.options.map((o, idx) => {
+                  const active = cur?.label === o ? ' active' : '';
+                  const score = window.pillScore(idx, cfg.options.length, cfg.scoreMin, cfg.scoreMax);
+                  return `<button class="scale-pill${active}" data-ci="${ci}" data-field="${p.id}" data-val="${escAttr(o)}" data-score="${score}" onclick="saveScaleField(this)">${o}</button>`;
                 }).join('')}
               </div>
             </div>`;
@@ -1095,14 +1174,28 @@
     document.querySelectorAll('.coffee-panel').forEach((p,j) => p.classList.toggle('active', j===i));
   }
 
-  // Handles scale pill selection — reads data attributes, updates state, toggles active class.
+  // Handles scale pill selection — stores { value, label } where value is
+  // the equal-spaced hidden score for the chosen pill.
   function saveScaleField(btn) {
     const ci  = parseInt(btn.dataset.ci);
     const key = btn.dataset.field;
-    const val = btn.dataset.val;
-    coffees[ci].data[key] = val;
+    const label = btn.dataset.val;
+    const score = parseFloat(btn.dataset.score);
+    coffees[ci].data[key] = { value: isNaN(score) ? null : score, label };
     btn.closest('.scale-pill-group').querySelectorAll('.scale-pill').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    updateTabDot(ci);
+  }
+
+  // Handles slider input — stores { value } (no label in slider mode).
+  function saveSliderField(input) {
+    const ci  = parseInt(input.dataset.ci);
+    const key = input.dataset.field;
+    const val = parseFloat(input.value);
+    coffees[ci].data[key] = { value: val };
+    const readout = document.getElementById(`readout-${ci}-${key}`);
+    if (readout) readout.textContent = val.toFixed(2);
+    updateTabDot(ci);
   }
 
   // Stores a plain field value (text, select, textarea) on the coffee object.
@@ -1197,7 +1290,7 @@
     const now  = new Date().toLocaleDateString('en-IE', { day:'numeric', month:'long', year:'numeric' });
 
     let html = `<p class="review-session-name">${escHtml(name)}</p>
-      <p class="review-meta">${coffees.length} coffee${coffees.length>1?'s':''} · ${now}</p>`;
+      <p class="review-meta">${coffees.length} coffee${coffees.length>1?'s':''} · ${currentPreset ? escHtml(currentPreset.name) + ' · ' : ''}${now}</p>`;
 
     coffees.forEach((c,i) => {
       const d = c.data;
@@ -1207,25 +1300,32 @@
           <span class="review-coffee-name">${escHtml(c.name)}</span>
         </div>`;
 
-      // Render all text/select/textarea fields except flavours and notes (handled separately)
-      const textFields = ['origin','variety','process','roaster','producer','roast','harvest'];
-      textFields.forEach(k => {
-        if (activeParams.has(k) && d[k]) {
-          const label = ALL_PARAMS.find(p=>p.id===k)?.label || k;
-          html += `<div class="review-row"><span class="review-key">${label}</span><span class="review-val">${escHtml(d[k])}</span></div>`;
+      // Render each active param in ALL_PARAMS order
+      window.ALL_PARAMS.forEach(p => {
+        if (!activeParams.has(p.id)) return;
+        if (p.id === 'flavours' || p.id === 'notes') return; // handled below
+
+        if (p.type === 'scale') {
+          const v = window.readScaleValue(d[p.id]);
+          if (!v) return;
+          // Show label if present (pills), else the numeric value (slider)
+          const shown = v.label != null
+            ? `${escHtml(v.label)}${v.value != null ? ` · ${Number(v.value).toFixed(2)}` : ''}`
+            : (v.value != null ? Number(v.value).toFixed(2) : '');
+          if (!shown) return;
+          html += `<div class="review-row"><span class="review-key">${escHtml(p.label)}</span><span class="review-val">${shown}</span></div>`;
+        } else if (d[p.id]) {
+          // text / textarea
+          html += `<div class="review-row" style="flex-direction:column;gap:4px"><span class="review-key">${escHtml(p.label)}</span><span class="review-val" style="color:var(--mid);font-style:italic;font-size:0.88rem">${escHtml(d[p.id])}</span></div>`;
         }
       });
 
-      // Render textarea fields (body, dry_aroma, wet_aroma, aftertaste, notes)
-      const textareaFields = ['dry_aroma','wet_aroma','body','aftertaste','notes'];
-      textareaFields.forEach(k => {
-        if (activeParams.has(k) && d[k]) {
-          const label = ALL_PARAMS.find(p=>p.id===k)?.label || k;
-          html += `<div class="review-row" style="flex-direction:column;gap:4px"><span class="review-key">${label}</span><span class="review-val" style="color:var(--mid);font-style:italic;font-size:0.88rem">${escHtml(d[k])}</span></div>`;
-        }
-      });
+      // Notes (textarea) explicitly
+      if (activeParams.has('notes') && d.notes) {
+        html += `<div class="review-row" style="flex-direction:column;gap:4px"><span class="review-key">Notes</span><span class="review-val" style="color:var(--mid);font-style:italic;font-size:0.88rem">${escHtml(d.notes)}</span></div>`;
+      }
 
-      // Render flavour tags
+      // Flavour tags
       if (activeParams.has('flavours') && d.flavours?.length) {
         html += `<div class="review-tags">${d.flavours.map(f=>`<span class="review-tag">${escHtml(f)}</span>`).join('')}</div>`;
       }
@@ -1304,6 +1404,7 @@
           session_date:  new Date().toISOString().split('T')[0],
           coffees:       coffees.map(c => ({ name: c.name, meta: c.meta || {}, data: c.data || {} })),
           params_active: [...activeParams],
+          schema:        window.buildSessionSchema(currentPreset),
           timer_enabled: useTimer,
           share_token:   null,
           is_active:     false,
@@ -1370,6 +1471,7 @@
           data: c.data || {},
         })),
         params_active: [...activeParams],
+        schema:        window.buildSessionSchema(currentPreset),
         timer_enabled: useTimer,
         share_token:   shareToken,
         status:        'scheduled',
@@ -1562,7 +1664,10 @@
     document.getElementById('schedule-time').value = '';
     document.querySelectorAll('.recurrence-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('rec-none').classList.add('active');
-    activeParams = defaultActiveParams();
+    // Reset to the user's default preset
+    const dft = window.getActivePreset(presetsData);
+    applyPreset(dft);
+    renderPresetPicker();
     useTimer = false;
     clearInterval(timerInterval);
     timerRunning = false;
@@ -1587,6 +1692,9 @@
   // Always use this when rendering coffees[].name or any user input.
   function escHtml(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function escAttr(s) {
+    return String(s||'').replace(/"/g,'&quot;');
   }
 
   // Kick everything off

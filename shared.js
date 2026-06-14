@@ -313,6 +313,79 @@ window.applyPresetGlobals = function(preset) {
 
 
 // ═══════════════════════════════════════════════════════════════
+//  6. SESSION SCHEMA SNAPSHOT
+// ═══════════════════════════════════════════════════════════════
+// When a host creates a session, we snapshot the preset they used into
+// cupping_sessions.schema. This means guests and history rendering use
+// the exact config the session was cupped with — even if the host later
+// edits or deletes that preset.
+//
+// The snapshot fully resolves each active scale attribute (presentation,
+// options, score range) so readers don't need access to the preset or
+// even ALL_PARAMS to render correctly.
+
+window.buildSessionSchema = function(preset) {
+  if (!preset) return null;
+
+  const scales = {};
+  (preset.activeParams || []).forEach(attrId => {
+    const catalog = window.ALL_PARAMS.find(p => p.id === attrId);
+    if (!catalog || catalog.type !== 'scale') return;
+    const r = window.resolveAttr(preset, attrId);
+    scales[attrId] = {
+      label:        r.label,
+      presentation: r.presentation,
+      options:      r.options,
+      scoreMin:     r.scoreMin,
+      scoreMax:     r.scoreMax,
+      scoreStep:    r.scoreStep,
+    };
+  });
+
+  return {
+    presetId:     preset.id || null,
+    presetName:   preset.name || '',
+    activeParams: [...(preset.activeParams || [])],
+    passes:       preset.passes || 1,
+    wheel:        preset.wheel || null, // null = standard window.WHEEL
+    scales:       scales,
+  };
+};
+
+// Returns the list of scale attribute descriptors from a session schema,
+// in ALL_PARAMS order. Each: { id, label, presentation, options, scoreMin, scoreMax, scoreStep }.
+// Falls back to the global SCALE_FIELDS if the session has no schema
+// (e.g. older sessions created before Phase 4C).
+window.schemaScaleFields = function(schema) {
+  if (schema && schema.scales) {
+    return window.ALL_PARAMS
+      .filter(p => p.type === 'scale' && schema.scales[p.id])
+      .map(p => ({ id: p.id, ...schema.scales[p.id] }));
+  }
+  // Legacy fallback: global scale fields, all pills
+  return window.SCALE_FIELDS.map(sf => ({
+    id: sf.id, label: sf.label, presentation: 'pills',
+    options: sf.options, scoreMin: 6, scoreMax: 10, scoreStep: 0.25,
+  }));
+};
+
+// Normalises a stored scale value into { value, label } regardless of
+// whether it's the new object shape or a legacy bare string/number.
+//   { value: 8, label: 'Round' }  → unchanged
+//   'Round'                        → { value: null, label: 'Round' }
+//   8.5                            → { value: 8.5, label: null }
+//   null/undefined                 → null
+window.readScaleValue = function(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'object') {
+    return { value: (raw.value ?? null), label: (raw.label ?? null) };
+  }
+  if (typeof raw === 'number') return { value: raw, label: null };
+  return { value: null, label: String(raw) }; // legacy string
+};
+
+
+// ═══════════════════════════════════════════════════════════════
 //  5. BACKWARDS-COMPAT (Phase 1/2/3 helpers)
 // ═══════════════════════════════════════════════════════════════
 // loadCuppingDefaults / saveCuppingDefaults present the OLD single-
